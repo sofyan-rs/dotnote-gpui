@@ -451,7 +451,12 @@ impl Render for Workspace {
             .size_full()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
-            .child(title_bar::render(title, window, cx))
+            .child(title_bar::render(
+                title,
+                cx.listener(|this, _, window, cx| this.toggle_sidebar(&ToggleSidebar, window, cx)),
+                window,
+                cx,
+            ))
             .child(
                 h_resizable("workspace-split")
                     .on_resize(|state, _, cx| {

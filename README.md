@@ -1,6 +1,6 @@
 # Dotnote
 
-A minimal, cross-platform markdown vault app, in the style of Obsidian but without Electron. It's built in Rust with [GPUI](https://www.gpui.rs/) and [GPUI Kit](https://gpui-kit.com/), and runs on **macOS, Windows, and Linux (Fedora)** from one codebase.
+A minimal, cross-platform markdown vault app. It's built in Rust with [GPUI](https://www.gpui.rs/) and [GPUI Kit](https://gpui-kit.com/), and runs on **macOS, Windows, and Linux (Fedora)** from one codebase.
 
 Open any folder on disk as a "vault", browse it in a sidebar, and edit markdown files directly. Files on disk are the only source of truth, so there is no database or lock-in. Optionally, a vault can sync through your own git repository.
 
@@ -10,7 +10,7 @@ Open any folder on disk as a "vault", browse it in a sidebar, and edit markdown 
 
 ![A locked note: encrypted on disk until the vault password is entered](ss/ss-3.png)
 
-> **Status:** early releases (v0.1). See [docs/implementation/PLAN.md](docs/implementation/PLAN.md) for what's done and what's next.
+> **Status:** v1.0. See [docs/implementation/PLAN.md](docs/implementation/PLAN.md) for what's done and what's next.
 
 ## Download
 

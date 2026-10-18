@@ -1768,7 +1768,7 @@ dependencies = [
 
 [[package]]
 name = "dotnote"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "dotnote-core",
@@ -1785,7 +1785,7 @@ dependencies = [
 
 [[package]]
 name = "dotnote-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "age",
  "dirs 7.0.0",

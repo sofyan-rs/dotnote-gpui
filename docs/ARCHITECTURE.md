@@ -637,3 +637,4 @@ Answered from crate source.
 | 9 | Folder picker | `prompt_for_paths` returns a oneshot receiver; `Err` shows a notification. Fedora runtime check pending. |
 | 10 | Live stage A styling | Color, weight, italic per capture; no per-capture font size. Must use the unstyled `gpui_base::input::Editor` + `set_editor_style`, because the styled component forces the global highlight theme. |
 | 11 | Live stage B input | `EntityInputHandler` with **UTF-16** ranges; reference `gpui-pre/examples/input.rs`. IME runtime check on Windows/Fedora pending. |
+| 12 | Clickable title bar controls | `TitleBar` marks its row `WindowControlArea::Drag`. On Windows any hitbox stack containing it answers `HTCAPTION`, so the OS eats clicks. Wrap each clickable child in `div().occlude()` (as `AppMenuBar` does). |

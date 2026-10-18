@@ -487,7 +487,7 @@ For notes holding credentials: the note is **encrypted on disk**, so it's unread
 
 Dotnote updates itself from this repository's **GitHub Releases**; there's no Dotnote update server.
 
-- **Publishing** (`.github/workflows/release.yml`): pushing a tag `vX.Y.Z` (it must match the `Cargo.toml` version, or the workflow fails) builds and publishes a release with fixed asset names: `Dotnote-macos-arm64.zip` (the `.app`, zipped with `ditto`), `Dotnote-windows-x64.zip` (`Dotnote.exe`), `Dotnote-fedora-x86_64.rpm`, and `SHA256SUMS`. The `.dmg` is also attached for first installs.
+- **Publishing** (`.github/workflows/release.yml`): pushing a tag `vX.Y.Z` (it must match the `Cargo.toml` version, or the workflow fails) builds and publishes a release with fixed asset names: `Dotnote-macos-arm64.zip` (the `.app`, zipped with `ditto`), `Dotnote-windows-x64.zip` (`Dotnote.exe`), `Dotnote-fedora-x86_64.rpm`, and `SHA256SUMS`. The `.dmg` (macOS) and `Dotnote-<version>-windows-x64-setup.exe` (Inno Setup, `packaging/windows/dotnote.iss`) are also attached for first installs. The Windows installer installs per user into `%LOCALAPPDATA%\Programs\Dotnote` (no admin), so the updater can replace the exe there.
 - **Uses installed programs**, like git sync: `curl` for HTTPS (built into macOS, Windows 10+, Fedora), `ditto` (macOS) and `tar` (Windows) to unpack. No HTTP or TLS library is linked in. On Windows they run with `CREATE_NO_WINDOW`.
 - **Check** (`update::fetch_latest_release`): `GET api.github.com/repos/…/releases/latest`; 404 means nothing released yet. A release is offered when its tag is a higher `major.minor.patch` than `CARGO_PKG_VERSION`. Drafts and pre-releases are never offered.
 - **When** (`Updater` entity, owned by `Workspace`): once, 5 s after launch, in release builds with `Settings::check_for_updates` on (default; quiet unless there's an update), and on *Dotnote → Check for Updates…* (always reports the result).
@@ -588,7 +588,7 @@ Rename and create reject, with a readable error:
 | App menu | native menu bar via `cx.set_menus` | menu in the title bar | menu in the title bar |
 
 ### 8.5 Linux (Fedora) runtime requirements
-A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa or the vendor driver). The folder picker uses the XDG desktop portal. Fedora Workstation ships `xdg-desktop-portal-gnome`; the KDE spin ships `xdg-desktop-portal-kde`. Distribution is `.rpm` (see PLAN Phase 8).
+A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa or the vendor driver). The folder picker uses the XDG desktop portal. Fedora Workstation ships `xdg-desktop-portal-gnome`; the KDE spin ships `xdg-desktop-portal-kde`. Distribution is `.rpm`.
 
 ---
 
@@ -622,7 +622,7 @@ A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa
 
 ## 11. Open questions (Phase 0 spike results)
 
-Answered from crate source. Details, signatures, and file references are in [implementation/spike-notes.md](./implementation/spike-notes.md).
+Answered from crate source.
 
 | # | Question | Result |
 |---|---|---|

@@ -6,6 +6,7 @@ name: Release
 # The in-app updater (crates/dotnote-core/src/update.rs) looks for these exact
 # asset names in the latest release, plus SHA256SUMS:
 #   Dotnote-macos-arm64.zip, Dotnote-windows-x64.zip, Dotnote-fedora-x86_64.rpm
+# The .dmg and the Windows setup.exe are for first installs only.
 on:
   push:
     tags: ["v*"]
@@ -49,7 +50,7 @@ jobs:
             target/release/bundle/macos/*.zip
 
   windows:
-    name: Windows (.zip)
+    name: Windows (.zip, setup.exe)
     needs: version
     runs-on: windows-latest
     steps:
@@ -63,10 +64,21 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item target/release/dotnote.exe dist/Dotnote.exe
           Compress-Archive -Path dist/Dotnote.exe -DestinationPath Dotnote-windows-x64.zip
+      # The installer is for first installs; the updater uses the zip.
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          & $iscc /DAppVersion=$version "/DSourceExe=$PWD\target\release\dotnote.exe" packaging\windows\dotnote.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: Dotnote-windows-x64.zip
+          path: |
+            Dotnote-windows-x64.zip
+            Dotnote-*-setup.exe
 
   fedora:
     name: Fedora (.rpm)

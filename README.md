@@ -10,7 +10,7 @@ Open any folder on disk as a "vault", browse it in a sidebar, and edit markdown 
 
 ![A locked note: encrypted on disk until the vault password is entered](ss/ss-3.png)
 
-> **Status:** v1.0. See [docs/implementation/PLAN.md](docs/implementation/PLAN.md) for what's done and what's next.
+> **Status:** v1.0.
 
 ## Download
 
@@ -19,7 +19,7 @@ Get the latest version from [Releases](https://github.com/sofyan-rs/dotnote-gpui
 | System | File |
 |---|---|
 | macOS (Apple Silicon) | `Dotnote-<version>-arm64.dmg`: open it and drag Dotnote to Applications. The app isn't notarized yet, so the first time, right-click it → *Open*. |
-| Windows 10+ (x64) | `Dotnote-windows-x64.zip`: unzip and run `Dotnote.exe`. |
+| Windows 10+ (x64) | `Dotnote-<version>-windows-x64-setup.exe`: run it (no admin needed). Windows SmartScreen may warn because the app isn't signed yet: *More info* → *Run anyway*. Or use `Dotnote-windows-x64.zip`: unzip and run `Dotnote.exe`. |
 | Fedora (x86_64) | `Dotnote-fedora-x86_64.rpm`: `sudo dnf install ./Dotnote-fedora-x86_64.rpm` |
 
 Dotnote checks for a new release at launch and from *Dotnote → Check for Updates…*, then downloads, verifies, and installs it in place.
@@ -63,7 +63,6 @@ cargo test --workspace
 ## Docs
 
 - [Architecture](docs/ARCHITECTURE.md): stack, project structure, state model, components, cross-platform concerns, feature summary
-- [Implementation plan](docs/implementation/PLAN.md): phased roadmap, feature checklist, risks
 - [Contributing](docs/CONTRIBUTION.md): setup, conventions, testing, PR checklist
 
 ## Scope

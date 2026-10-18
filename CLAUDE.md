@@ -8,13 +8,11 @@ Dotnote is a minimal, cross-platform (**macOS, Windows, Linux — Fedora is the 
 
 Scope is intentionally minimal: open a folder, browse it, edit markdown. There are no wikilinks, backlinks, tags, graph, or plugins. (Tabs are in scope; split editor groups are not. Optional git sync with the user's own remote is in scope, using the installed `git`; no Dotnote sync service.) Push back on scope creep.
 
-**Status:** docs-first. Check `docs/implementation/PLAN.md` for the current phase before writing code, and tick checkboxes there as items land.
+**Status:** v1.0 released.
 
 ## Docs (read before non-trivial changes)
 
 - `docs/ARCHITECTURE.md`: stack, project structure and "where does my code go" (§3), `VaultStore` state model, per-component specs (§6), save/watcher pipeline (§7), cross-platform rules (§8), feature summary (§10), open questions (§11).
-- `docs/implementation/PLAN.md`: phased roadmap, per-OS feature checklist, risks.
-- `docs/implementation/spike-notes.md`: Phase 0 answers about the gpui-kit API (written during Phase 0).
 - `docs/CONTRIBUTION.md`: setup per OS, conventions, PR checklist.
 - `fixtures/sample-vault/`: manual-test vault; `Example.md` covers every preview element.
 
@@ -90,5 +88,5 @@ Live (realtime formatter, the default), Source (highlighted raw markdown), Split
   - The app surfaces user-facing failures with `VaultEvent::Error` → `push_notification`.
   - Don't silently `let _ =` or `.ok()` failed I/O. Don't call `unwrap()` in app code paths.
   - Use `log`, not `println!`.
-- **gpui-kit is pre-1.0** and its docs are incomplete. Before using an API whose signature you haven't seen, verify it on docs.rs/gpui-kit or in the crate source (`~/.cargo/registry/src/*/gpui-kit-*`). Don't guess. Record findings in `spike-notes.md`.
+- **gpui-kit is pre-1.0** and its docs are incomplete. Before using an API whose signature you haven't seen, verify it on docs.rs/gpui-kit or in the crate source (`~/.cargo/registry/src/*/gpui-kit-*`). Don't guess. Record findings in ARCHITECTURE §11.
 - Commits use Conventional Commits (`feat(tree): …`, `fix(save): …`). Only commit when asked.

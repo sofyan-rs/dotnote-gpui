@@ -1,6 +1,6 @@
 # Contributing
 
-This guide covers setting up the project, building it, and the rules for changes. Read [ARCHITECTURE.md](./ARCHITECTURE.md) for the design and [implementation/PLAN.md](./implementation/PLAN.md) for what's being built next.
+This guide covers setting up the project, building it, and the rules for changes. Read [ARCHITECTURE.md](./ARCHITECTURE.md) for the design.
 
 ---
 
@@ -137,7 +137,7 @@ The full tree, the rules for adding files, and the "where does my code go?" tabl
 |---|---|
 | `dotnote-core` | Plain `#[test]`. Filesystem tests use `tempfile::tempdir()`. OS-specific cases use `#[cfg(unix)]` / `#[cfg(windows)]`. |
 | UI behavior | Headless UI tests with gpui-kit `test-support` (`#[gpui_kit::test]`, `TestWindowExt::click/press/drag_to/input`). Open the real `Workspace` on a `tempfile` vault, call `SettingsStore::init_in_memory` so the user's settings are never touched, and assert on disk/state. Mark elements to find with `.test_support()` (before `track_focus`). Example: `ui/sidebar/file_tree_tests.rs`. Put them in `<view>_tests.rs` next to the view. |
-| Manual | The feature checklist in PLAN.md, per OS, before each release. |
+| Manual | The feature summary in ARCHITECTURE §10, per OS, before each release. |
 
 Every bug fix in `dotnote-core` gets a regression test. New format transforms need tests for empty selections, multi-byte text, and the start and end of the document.
 
@@ -171,7 +171,7 @@ Every bug fix in `dotnote-core` gets a regression test. New format transforms ne
 - [ ] New logic in `dotnote-core` has tests.
 - [ ] No new `cfg(target_os)` outside `platform.rs`.
 - [ ] Data-safety rules (§4) are respected. Save/load changes were tested manually.
-- [ ] `docs/implementation/PLAN.md` checkboxes are updated. ARCHITECTURE.md is updated if the design changed.
+- [ ] ARCHITECTURE.md is updated if the design changed.
 - [ ] UI changes include screenshots (ideally on more than one OS).
 
 ---

@@ -1,6 +1,6 @@
 # Architecture
 
-KuNotes is a minimal, cross-platform (macOS, Windows, Linux) markdown vault app. The Linux target is **Fedora** (Workstation, GNOME/Wayland first; KDE spin second). It uses Rust, [GPUI](https://www.gpui.rs/), and [GPUI Kit](https://gpui-kit.com/) (`gpui-kit` crate, which bundles GPUI, GPUI Base, the component library, and default icons).
+Dotnote is a minimal, cross-platform (macOS, Windows, Linux) markdown vault app. The Linux target is **Fedora** (Workstation, GNOME/Wayland first; KDE spin second). It uses Rust, [GPUI](https://www.gpui.rs/), and [GPUI Kit](https://gpui-kit.com/) (`gpui-kit` crate, which bundles GPUI, GPUI Base, the component library, and default icons).
 
 Scope: **open a folder, browse it, edit markdown.** There are no wikilinks, backlinks, graph view, tags, or plugins. Files on disk are the only source of truth, so there is no database or lock-in. Syncing is optional and uses plain git with a remote the user owns (§6.11).
 
@@ -16,7 +16,7 @@ Scope: **open a folder, browse it, edit markdown.** There are no wikilinks, back
 - Keep logic testable: pure logic lives in a crate with no GPUI dependency and has unit tests.
 
 ### Non-goals (for now)
-- Wikilinks, backlinks, tags, graph, plugins, a KuNotes sync service (git sync with the user's own remote is in scope, §6.11).
+- Wikilinks, backlinks, tags, graph, plugins, a Dotnote sync service (git sync with the user's own remote is in scope, §6.11).
 - Multiple windows or multiple vaults open at once.
 - Split editor groups (several tabs side by side).
 - Reloading the open editor's content on *every* outside change (see [§7.3](#73-external-changes-to-the-open-file)); it is reloaded after a git sync.
@@ -31,11 +31,11 @@ Scope: **open a folder, browse it, edit markdown.** There are no wikilinks, back
 | Toolchain | Rust ≥ 1.92, edition 2024 | 1.92 is required by gpui-kit's locked dependency graph. Windows needs the MSVC toolchain. |
 | Markdown preview | `gpui_kit::component::text::TextView::markdown` | Renders task lists; style hooks via `TextViewStyle` (§6.5). |
 | Editor (Source, Split) | gpui-kit `EditorState` (`.language("markdown")`, soft wrap, no line numbers) | Styled by our own `InputHighlighter` (`ui/editor/markdown_style.rs`). |
-| Editor (Live) | Custom `LiveEditor` element on GPUI primitives (`EntityInputHandler`, `shape_text` layout) over a plain `String` buffer (`kunotes_core::live_buffer`) | See §6.9. |
+| Editor (Live) | Custom `LiveEditor` element on GPUI primitives (`EntityInputHandler`, `shape_text` layout) over a plain `String` buffer (`dotnote_core::live_buffer`) | See §6.9. |
 | File watching | `notify` + `notify-debouncer-full` | FSEvents on macOS, ReadDirectoryChangesW on Windows, inotify on Linux. |
 | Trash | `trash` crate | macOS Trash, Windows Recycle Bin, freedesktop trash on Linux. |
 | Reveal in file manager | `opener` crate (`reveal` feature) | Finder, Explorer, or the default Linux file manager. |
-| Config dir | `dirs` crate | `dirs::config_dir()/kunotes/` |
+| Config dir | `dirs` crate | `dirs::config_dir()/dotnote/` |
 | Settings serialization | `serde` + `serde_json` | |
 | Natural sort | `natord` | Case-insensitive, `a2` sorts before `a10`. |
 | Character count | `unicode-segmentation` | Counts grapheme clusters, so an emoji counts as one character. |
@@ -52,12 +52,12 @@ Exact versions are pinned in `Cargo.lock` once Phase 0 is done.
 The layout follows common Rust practice but stays small and flat, so someone new to Rust can find things quickly.
 
 ```
-kunotes-gpui/
+dotnote-gpui/
 ├── Cargo.toml                 # workspace: member crates, shared dependency versions
 ├── Cargo.lock                 # exact dependency versions (committed; this is an app)
 ├── rust-toolchain.toml        # pinned Rust version
 ├── crates/
-│   ├── kunotes-core/          # LIBRARY: pure logic, no GPUI, fully unit-tested
+│   ├── dotnote-core/          # LIBRARY: pure logic, no GPUI, fully unit-tested
 │   │   ├── Cargo.toml
 │   │   ├── src/
 │   │   │   ├── lib.rs         # lists the modules; start reading here
@@ -82,7 +82,7 @@ kunotes-gpui/
 │   │       ├── fs_ops.rs
 │   │       ├── scan.rs
 │   │       └── settings.rs
-│   └── kunotes/               # BINARY: the GPUI desktop app
+│   └── dotnote/               # BINARY: the GPUI desktop app
 │       ├── Cargo.toml
 │       └── src/
 │           ├── main.rs        # entry point only: logging + start the app
@@ -123,12 +123,12 @@ kunotes-gpui/
 │               ├── quick_switcher_tests.rs
 │               ├── dialogs.rs         # delete confirmation
 │               └── empty_state.rs
-├── assets/icon/kunotes.png    # 1024px app icon master
+├── assets/icon/dotnote.png    # 1024px app icon master
 ├── fixtures/sample-vault/     # sample notes for manual testing
 ├── packaging/                 # per-OS bundling files
 │   ├── make_icons.sh          # regenerates all icons from the master (macOS)
-│   ├── macos/KuNotes.icns
-│   ├── windows/kunotes.ico
+│   ├── macos/Dotnote.icns
+│   ├── windows/dotnote.ico
 │   └── linux/icons/hicolor/   # freedesktop icon sizes for Fedora
 ├── docs/
 └── .github/workflows/         # CI
@@ -136,8 +136,8 @@ kunotes-gpui/
 
 ### Why two crates?
 
-- **`kunotes-core`** has no GPUI dependency. Its tests build in seconds and run headless on every OS. Anything that can be written without GPUI belongs here: file operations, parsing, text transforms.
-- **`kunotes`** is the app. It only does layout, events, and wiring. It calls into `kunotes-core` for the real work.
+- **`dotnote-core`** has no GPUI dependency. Its tests build in seconds and run headless on every OS. Anything that can be written without GPUI belongs here: file operations, parsing, text transforms.
+- **`dotnote`** is the app. It only does layout, events, and wiring. It calls into `dotnote-core` for the real work.
 
 This split is the main "best practice" in the layout. Keeping business logic out of the UI keeps both sides simple.
 
@@ -152,15 +152,15 @@ This split is the main "best practice" in the layout. Keeping business logic out
 7. **Keep files under ~400 lines.** Past that, split by responsibility.
 8. **Tests:**
    - Unit tests go at the bottom of the same file in `#[cfg(test)] mod tests`.
-   - Tests that create real files go in `crates/kunotes-core/tests/`.
+   - Tests that create real files go in `crates/dotnote-core/tests/`.
 9. **Visibility:** keep items private by default. Use `pub` only for what another module needs. Use `pub(crate)` for helpers shared inside a crate.
 
 ### Where does my code go?
 
 | I'm writing… | Put it in |
 |---|---|
-| Logic that doesn't need GPUI (parsing, paths, file ops, text math) | `kunotes-core/src/<topic>.rs` + tests |
-| A new shortcut or menu command | `kunotes/src/actions.rs` (define and bind), handler in the view that owns it |
+| Logic that doesn't need GPUI (parsing, paths, file ops, text math) | `dotnote-core/src/<topic>.rs` + tests |
+| A new shortcut or menu command | `dotnote/src/actions.rs` (define and bind), handler in the view that owns it |
 | State shared by several views | `vault_store.rs` (or a new `<name>_store.rs` entity if it's unrelated to the vault) |
 | A new view for an existing feature | that feature's folder in `ui/` |
 | A new feature with a single view | `ui/<feature>.rs` |
@@ -187,7 +187,7 @@ This split is the main "best practice" in the layout. Keeping business logic out
               │  selected_path, expanded: HashSet<PathBuf>    │
               │  emits VaultEvent                              │
               └──────────▲───────────────────────┬───────────┘
-                         │ refresh()             │ fs ops → kunotes-core
+                         │ refresh()             │ fs ops → dotnote-core
               ┌──────────┴──────────┐            ▼
               │  Watcher (notify)   │      disk (source of truth)
               │  background thread  │
@@ -218,7 +218,7 @@ pub enum VaultEvent {
 impl EventEmitter<VaultEvent> for VaultStore {}
 ```
 
-Methods (each wraps a `kunotes-core` function, then calls `refresh` and updates selection):
+Methods (each wraps a `dotnote-core` function, then calls `refresh` and updates selection):
 
 | Method | Behavior |
 |---|---|
@@ -247,7 +247,8 @@ Methods (each wraps a `kunotes-core` function, then calls `refresh` and updates 
 The app isn't sandboxed, so the last vault is stored as a plain path.
 
 ```rust
-// $KUNOTES_CONFIG_DIR/settings.json if set, else dirs::config_dir()/kunotes/settings.json
+// $DOTNOTE_CONFIG_DIR/settings.json if set, else dirs::config_dir()/dotnote/settings.json
+// (read from the old dirs::config_dir()/kunotes/settings.json once if the new file is missing)
 #[derive(Serialize, Deserialize, Default)]
 pub struct Settings {
     pub last_vault: Option<PathBuf>,
@@ -314,7 +315,7 @@ The gpui-kit `Tree` component's docs don't cover double-click, context menus, or
 ```rust
 struct VisibleRow { path: PathBuf, name: SharedString, depth: usize, is_dir: bool, is_expanded: bool }
 
-fn visible_rows(root: &VaultNode, expanded: &HashSet<PathBuf>) -> Vec<VisibleRow>  // in kunotes-core, tested
+fn visible_rows(root: &VaultNode, expanded: &HashSet<PathBuf>) -> Vec<VisibleRow>  // in dotnote-core, tested
 ```
 
 | Interaction | Implementation |
@@ -350,12 +351,12 @@ A new `EditorPane` entity is created whenever `selected_file` changes, so per-fi
 - **One buffer, many views:** the markdown text is the only model. Every mode reads and writes the same string, so switching modes never changes the file. The cursor/selection offset carries over when switching between Live and Source.
 - **Source styling:** monospace 15px, soft wrap, ~25px padding, no line numbers, markdown highlighting via the `tree-sitter-markdown` feature.
 - **Default mode:** Live.
-- **Status bar** (`StatusBar` component): left `Ln {line}, Col {col}` (1-based, from the cursor offset via `kunotes_core::cursor`), right `{n} characters` (grapheme count). Monospace 11px.
+- **Status bar** (`StatusBar` component): left `Ln {line}, Col {col}` (1-based, from the cursor offset via `dotnote_core::cursor`), right `{n} characters` (grapheme count). Monospace 11px.
 - **Title:** the window title and the centered title-bar text show the file name without `.md`.
 
 ### 6.4 Formatter bar (`ui/editor/formatter_bar.rs`)
 
-Each button calls a **pure** transform in `kunotes_core::format` and applies the result to the editor in one undoable replace. Then it sets the new selection or cursor.
+Each button calls a **pure** transform in `dotnote_core::format` and applies the result to the editor in one undoable replace. Then it sets the new selection or cursor.
 
 ```rust
 pub struct Edit { pub range: Range<usize>, pub replacement: String, pub new_selection: Range<usize> }
@@ -390,7 +391,7 @@ With no selection, transforms apply at the cursor position. They fall back to th
 ### 6.6 Quick switcher (`ui/quick_switcher.rs`)
 
 - A small `QuickSwitcher` view (own search field + `uniform_list`) inside `window.open_dialog(..)`, width 480. gpui-kit's `Command` palette was replaced because its search field can't be padded (it looked cramped).
-- Items: every `.md` file in the vault, flattened (`kunotes_core::search::flatten_files`). The label is the name without `.md` (long names end with "…"). The right-hand hint is the parent folder name in uppercase.
+- Items: every `.md` file in the vault, flattened (`dotnote_core::search::flatten_files`). The label is the name without `.md` (long names end with "…"). The right-hand hint is the parent folder name in uppercase.
 - Filter: every typed word must appear in "title + vault-relative path" (case-insensitive).
 - Keys (key context `QuickSwitcher`): `up`/`down` move the highlight, `enter` opens the note and closes the dialog, `escape` closes it. Enter is bound in the switcher's own context so it's handled before the dialog's own Enter (which would only close it). Footer hints: "↑↓ move · ↵ open · esc close".
 - Empty state: "No matches".
@@ -408,7 +409,7 @@ With no selection, transforms apply at the cursor position. They fall back to th
 
 ### 6.10 Tabs (`ui/editor_area/`)
 
-`EditorArea` is the right side of the window: a tab bar above the active note's editor, like VS Code. The tab rules live in `kunotes_core::tabs::TabList` (pure, unit-tested); `EditorArea` connects them to editors and the tree.
+`EditorArea` is the right side of the window: a tab bar above the active note's editor, like VS Code. The tab rules live in `dotnote_core::tabs::TabList` (pure, unit-tested); `EditorArea` connects them to editors and the tree.
 
 - **Preview tabs:** a single click in the tree opens a *preview* tab (italic), which the next clicked note replaces. Typing in it, double-clicking the note in the tree, double-clicking the tab, or opening it from the quick switcher or as a new note makes it permanent.
 - **One editor per tab** (`EditorPane`), created the first time the tab is shown, so the cursor and unsaved changes survive switching. Leaving a tab saves it immediately; every pane also autosaves.
@@ -426,7 +427,7 @@ It shipped in two stages. Stage A (a styled gpui-kit editor with markers faded b
 
 **Who owns the text.** `EditorPane` holds two editors: `LiveEditor` (Live) and gpui-kit's `EditorState` (Source and Split). Only one is in charge at a time (`live_active`). When the mode switches between them, `sync_active_editor` hands the text and cursor over (`LiveEditor::set_text` / `EditorState::replace_all`, only if the text differs). Preview keeps whichever was in charge. Saving, the preview, the status bar and the formatter bar all read from the editor in charge (`EditorPane::text`). The file bytes never change from switching (tested).
 
-**Pure logic (`kunotes-core`, unit-tested):**
+**Pure logic (`dotnote-core`, unit-tested):**
 - `live.rs`: `spans(text)`, a single-pass, line-by-line scan into styled parts (headings, bold/italic, inline code, links, list markers and task boxes, quotes, fenced code, rules, and the marker characters around them). Also drives Source-mode colors.
 - `live_view.rs`: `lines(text)` splits into lines with their spans; `line_view(line, spans, revealed)` decides what one line draws (`LineKind`: heading, task, bullet, quote, code, rule, ...) and maps cursor positions between the drawn text and the file (`to_display` / `to_source`).
 - `live_buffer.rs`: `LiveBuffer`, the text + selection: grapheme-aware movement, word movement, select word/line, delete, Enter with list continuation (`- `, `1. ` → `2. `, `- [ ] `; Enter on an empty item ends the list), `toggle_task`, undo/redo with typing grouped. `task_toggle(text, offset)` is shared with the Preview's checkboxes.
@@ -446,58 +447,58 @@ It shipped in two stages. Stage A (a styled gpui-kit editor with markers faded b
 - **Looks like Preview:** heading sizes and weights (28/21/17.5/16px, bold/semibold), foreground heading color, inline code on the accent background, links in the primary color, 14px square checkboxes, muted quotes with a 3px bar, and empty lines as tall as Preview's paragraph gap. Live, Source and Preview text all start 24px from the editor's left edge.
 - **Code blocks:** monospace with a background; the fences stay visible.
 - **Images:** a line that is only `![alt](path)` shows the picture (scaled down to the width, one image pixel per point like Preview); inline images and failed loads show the alt text like a link.
-- **Tables:** `kunotes_core::live_table` finds tables (header, `| --- |` delimiter, body rows) and splits rows into cells. With the cursor outside a table it's drawn as a grid like the Preview's (`ui/editor/live/table.rs`): bordered cells, a semibold header on a shaded row, the delimiter row hidden, columns sized to their widest cell and shrunk to fit. Clicking a cell puts the cursor in that cell's text, which reveals the whole table as markdown.
+- **Tables:** `dotnote_core::live_table` finds tables (header, `| --- |` delimiter, body rows) and splits rows into cells. With the cursor outside a table it's drawn as a grid like the Preview's (`ui/editor/live/table.rs`): bordered cells, a semibold header on a shaded row, the delimiter row hidden, columns sized to their widest cell and shrunk to fit. Clicking a cell puts the cursor in that cell's text, which reveals the whole table as markdown.
 
 **Preview checkboxes.** `preview.rs` installs a markdown block parser that turns lists containing tasks into a custom block, drawn with our own clickable checkboxes (the item text is rendered by a nested `TextView`). A click calls `EditorPane::toggle_task(offset)` through a `WeakEntity` captured by the renderer (actions don't reach the pane in Preview, since nothing there has focus).
 
 Not done yet: page up/down, Cmd/Ctrl+click on links, laying out only visible lines for very large notes, and a manual IME check on Windows and Fedora.
 
-### 6.11 Git sync (`kunotes-core/src/git.rs`, `git_sync.rs`, `ui/git_sync_dialog.rs`, `ui/sidebar/sync_footer.rs`)
+### 6.11 Git sync (`dotnote-core/src/git.rs`, `git_sync.rs`, `ui/git_sync_dialog.rs`, `ui/sidebar/sync_footer.rs`)
 
 Optional, per vault. The user enters a repository address (e.g. `https://github.com/you/notes.git`) in the Git Sync dialog, opened from the sidebar footer.
 
-- **Uses the installed `git`** (`std::process::Command`), not a git library: KuNotes never handles passwords or tokens; signing in is whatever git already uses (macOS Keychain, Git Credential Manager, `gh auth login`, SSH keys). For `https://github.com/…` addresses, each run also passes `-c credential.https://github.com.helper=!"<gh>" auth git-credential` when the GitHub CLI is installed, so a `gh auth login` works even if gh is set to the SSH protocol (it then never ran `gh auth setup-git`); the user's git config isn't changed. Apps opened from the Finder/launcher don't get the terminal's `PATH`, so `gh` is also looked for in the usual install folders (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `%ProgramFiles%\\GitHub CLI`). SSH addresses (`git@github.com:…`) use the user's SSH key/agent. Every run also passes `core.autocrlf=false`, so files sync byte for byte between Windows and other systems (KuNotes preserves each file's line endings itself). Every run sets `GIT_TERMINAL_PROMPT=0` so git fails instead of waiting for a password, and errors are rewritten into plain advice (`friendly_error`). On Windows git runs with `CREATE_NO_WINDOW` (the one `cfg(windows)` outside `platform.rs`, inside `kunotes-core`). If git isn't installed, the error says so.
-- **Connect** (`git::connect`): `git init` (branch `main`) if needed, a default `.gitignore` (`.DS_Store`, `Thumbs.db`, KuNotes temp files; `.img` *is* synced), set `origin`, then a first sync that merges the remote's notes with the ones already in the folder (`--allow-unrelated-histories`). The vault is added to `Settings::synced_vaults`; the address itself lives in the vault's `.git/config`.
-- **One sync** (`git::sync`): commit everything (`add -A`), find the remote's default branch (`ls-remote --symref`), fetch, merge, push. Commits and merges never sign (`commit.gpgsign=false`) and use a stand-in identity (`KuNotes <kunotes@localhost>`) if git has none.
+- **Uses the installed `git`** (`std::process::Command`), not a git library: Dotnote never handles passwords or tokens; signing in is whatever git already uses (macOS Keychain, Git Credential Manager, `gh auth login`, SSH keys). For `https://github.com/…` addresses, each run also passes `-c credential.https://github.com.helper=!"<gh>" auth git-credential` when the GitHub CLI is installed, so a `gh auth login` works even if gh is set to the SSH protocol (it then never ran `gh auth setup-git`); the user's git config isn't changed. Apps opened from the Finder/launcher don't get the terminal's `PATH`, so `gh` is also looked for in the usual install folders (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `%ProgramFiles%\\GitHub CLI`). SSH addresses (`git@github.com:…`) use the user's SSH key/agent. Every run also passes `core.autocrlf=false`, so files sync byte for byte between Windows and other systems (Dotnote preserves each file's line endings itself). Every run sets `GIT_TERMINAL_PROMPT=0` so git fails instead of waiting for a password, and errors are rewritten into plain advice (`friendly_error`). On Windows git runs with `CREATE_NO_WINDOW` (the one `cfg(windows)` outside `platform.rs`, inside `dotnote-core`). If git isn't installed, the error says so.
+- **Connect** (`git::connect`): `git init` (branch `main`) if needed, a default `.gitignore` (`.DS_Store`, `Thumbs.db`, Dotnote temp files; `.img` *is* synced), set `origin`, then a first sync that merges the remote's notes with the ones already in the folder (`--allow-unrelated-histories`). The vault is added to `Settings::synced_vaults`; the address itself lives in the vault's `.git/config`.
+- **One sync** (`git::sync`): commit everything (`add -A`), find the remote's default branch (`ls-remote --symref`), fetch, merge, push. Commits and merges never sign (`commit.gpgsign=false`) and use a stand-in identity (`Dotnote <dotnote@localhost>`) if git has none.
 - **Conflicts never lose text:** a file changed on both sides keeps this computer's version and saves the other as `Name (conflict YYYY-MM-DD).md` next to it (also for images); deleted-here/changed-there brings the file back; changed-here/deleted-there keeps it. The user gets a notification per copy.
 - **When** (`GitSync` entity, owned by `Workspace`): on opening the vault, 60 s after the last edit (`EditorAreaEvent::NoteEdited`), every 5 min, on click of the sidebar status, and on quit (commit + a push that gives up after 5 s). Only one sync runs at a time; a request during one runs right after. Open notes are saved (`EditorArea::save_all`) before every sync, and all git work runs on a background thread.
 - **After a pull**: the vault rescans, and open notes whose files changed reload (`EditorPane::reload_from_disk`) unless they have unsaved typing, which wins and is synced next time.
 - **Sidebar footer**: "Set Up Git Sync…" when off; otherwise "Synced N min ago" / "Syncing…" / "Sync failed · click to retry" (error in the tooltip) plus a gear for the dialog (change the address, Turn Off). Turning off removes the remote; the `.git` history stays.
-- Tests: `kunotes-core/tests/git.rs` syncs two vaults through a local bare repository (round trip, both-sides conflict, bad address, quit push).
+- Tests: `dotnote-core/tests/git.rs` syncs two vaults through a local bare repository (round trip, both-sides conflict, bad address, quit push).
 
 ---
 
-### 6.12 Locked notes (`kunotes-core/src/lock.rs`, `vault_lock.rs`, `ui/editor/locked.rs`, `ui/note_lock.rs`, `ui/unlock_dialog.rs`, `ui/change_password_dialog.rs`)
+### 6.12 Locked notes (`dotnote-core/src/lock.rs`, `vault_lock.rs`, `ui/editor/locked.rs`, `ui/note_lock.rs`, `ui/unlock_dialog.rs`, `ui/change_password_dialog.rs`)
 
 For notes holding credentials: the note is **encrypted on disk**, so it's unreadable in the vault folder and in its git remote.
 
 - **Format:** a locked note is `Name.md.age`, ASCII-armored [age](https://age-encryption.org) (the `age` crate). It shows in the tree and tabs as `Name.md` with a lock icon; `node::is_markdown` and `paths::note_title` treat `.md.age` as a note, rename keeps the double extension, and git conflict copies become `Name (conflict DATE).md.age`.
-- **One password per vault, protecting a vault key:** `.kunotes-lock.age` at the vault root holds a random age X25519 identity, encrypted with the password (age's scrypt passphrase recipient, ~1 s on purpose). Notes are encrypted to that key, so after one unlock, opening and saving locked notes is fast. The key file is hidden from the tree but synced by git (another computer needs it). Setting the password asks twice, needs ≥ 8 characters, and warns that it can't be recovered.
-- **Without KuNotes:** `age -d .kunotes-lock.age > key.txt` (asks the password), then `age -d -i key.txt "Name.md.age"`.
+- **One password per vault, protecting a vault key:** `.dotnote-lock.age` at the vault root holds a random age X25519 identity, encrypted with the password (age's scrypt passphrase recipient, ~1 s on purpose). Notes are encrypted to that key, so after one unlock, opening and saving locked notes is fast. The key file is hidden from the tree but synced by git (another computer needs it). Setting the password asks twice, needs ≥ 8 characters, and warns that it can't be recovered. A key file from before the rename (`.kunotes-lock.age`) is renamed to `.dotnote-lock.age` when the vault opens (`lock::migrate_old_key_file`).
+- **Without Dotnote:** `age -d .dotnote-lock.age > key.txt` (asks the password), then `age -d -i key.txt "Name.md.age"`.
 - **`VaultLock`** (owned by `Workspace`) holds the key in memory only while unlocked. It forgets it after 5 minutes without using a locked note (typing touches it), on `secondary-shift-l` / *Lock Notes Now* / the header's lock button, when another vault opens, and when the app quits.
 - **In the editor** (`Secret`: `No` / `Hidden` / `Shown`): a locked note opens hidden (lock screen with *Unlock…*) or, if unlocked, decrypted. Saving a shown note encrypts it (`lock::write_note` → `atomic_write`); a hidden one never saves. When the vault locks, a shown note saves with its own copy of the key, then its editors and preview are **rebuilt empty**, dropping the text and its undo history.
 - **Lock / Remove Lock** (tree menu, `ToggleNoteLock`): asks for the password if needed, saves open notes, writes the other form (`lock_note` checks the encrypted copy opens before anything else happens), then `VaultStore::replace_note` moves the tab to the new path and the old file to the OS trash. The notification reminds that the old plain copy is in the trash and older versions may remain in git history.
-- **Change Notes Password…** (File menu, `ChangeNotesPassword`): current password + new one twice. `lock::change_password` unlocks the vault key with the current password and rewrites only `.kunotes-lock.age` with the new one (`atomic_write`); the key stays the same, so locked notes aren't touched, and with git sync other computers pick up the new key file on their next sync. Afterwards notes are unlocked. Without a vault password yet, a notification says to lock a note first.
+- **Change Notes Password…** (File menu, `ChangeNotesPassword`): current password + new one twice. `lock::change_password` unlocks the vault key with the current password and rewrites only `.dotnote-lock.age` with the new one (`atomic_write`); the key stays the same, so locked notes aren't touched, and with git sync other computers pick up the new key file on their next sync. Afterwards notes are unlocked. Without a vault password yet, a notification says to lock a note first.
 - Limits: plaintext is in memory while shown (not zeroized); file names aren't encrypted.
-- Tests: `kunotes-core/tests/lock.rs` (password, round trip, wrong password, other vault's key), `ui/note_lock_tests.rs` (lock an open note, encrypted autosave, lock hides the text, unlock restores it).
+- Tests: `dotnote-core/tests/lock.rs` (password, round trip, wrong password, other vault's key), `ui/note_lock_tests.rs` (lock an open note, encrypted autosave, lock hides the text, unlock restores it).
 
 
-### 6.13 App updates (`kunotes-core/src/update.rs`, `updater.rs`, `ui/update_dialog.rs`)
+### 6.13 App updates (`dotnote-core/src/update.rs`, `updater.rs`, `ui/update_dialog.rs`)
 
-KuNotes updates itself from this repository's **GitHub Releases**; there's no KuNotes update server.
+Dotnote updates itself from this repository's **GitHub Releases**; there's no Dotnote update server.
 
-- **Publishing** (`.github/workflows/release.yml`): pushing a tag `vX.Y.Z` (it must match the `Cargo.toml` version, or the workflow fails) builds and publishes a release with fixed asset names: `KuNotes-macos-arm64.zip` (the `.app`, zipped with `ditto`), `KuNotes-windows-x64.zip` (`KuNotes.exe`), `KuNotes-fedora-x86_64.rpm`, and `SHA256SUMS`. The `.dmg` is also attached for first installs.
+- **Publishing** (`.github/workflows/release.yml`): pushing a tag `vX.Y.Z` (it must match the `Cargo.toml` version, or the workflow fails) builds and publishes a release with fixed asset names: `Dotnote-macos-arm64.zip` (the `.app`, zipped with `ditto`), `Dotnote-windows-x64.zip` (`Dotnote.exe`), `Dotnote-fedora-x86_64.rpm`, and `SHA256SUMS`. The `.dmg` is also attached for first installs.
 - **Uses installed programs**, like git sync: `curl` for HTTPS (built into macOS, Windows 10+, Fedora), `ditto` (macOS) and `tar` (Windows) to unpack. No HTTP or TLS library is linked in. On Windows they run with `CREATE_NO_WINDOW`.
 - **Check** (`update::fetch_latest_release`): `GET api.github.com/repos/…/releases/latest`; 404 means nothing released yet. A release is offered when its tag is a higher `major.minor.patch` than `CARGO_PKG_VERSION`. Drafts and pre-releases are never offered.
-- **When** (`Updater` entity, owned by `Workspace`): once, 5 s after launch, in release builds with `Settings::check_for_updates` on (default; quiet unless there's an update), and on *KuNotes → Check for Updates…* (always reports the result).
+- **When** (`Updater` entity, owned by `Workspace`): once, 5 s after launch, in release builds with `Settings::check_for_updates` on (default; quiet unless there's an update), and on *Dotnote → Check for Updates…* (always reports the result).
 - **Install** (`update::download_and_install`, background thread) after the user clicks *Install Update*: download `SHA256SUMS` and this system's package into a temp folder, **refuse it if the SHA-256 doesn't match**, then:
-  - macOS: unpack next to the running `KuNotes.app`, rename the running app aside, rename the new one in, remove the old one. Only a bundled app updates itself (a dev build says so).
-  - Windows: unpack, rename the running exe to `KuNotes.exe.old` (allowed while running), move the new exe in. The `.old` file is removed on the next launch.
-  - Fedora: `pkexec dnf install -y <rpm>` (system password prompt). Only for the rpm install at `/usr/bin/kunotes`; other installs are told to download it.
+  - macOS: unpack next to the running `Dotnote.app`, rename the running app aside, rename the new one in, remove the old one. Only a bundled app updates itself (a dev build says so).
+  - Windows: unpack, rename the running exe to `Dotnote.exe.old` (allowed while running), move the new exe in. The `.old` file is removed on the next launch.
+  - Fedora: `pkexec dnf install -y <rpm>` (system password prompt). Only for the rpm install at `/usr/bin/dotnote`; other installs are told to download it.
   - A failed swap renames the original back, so the app is never left missing.
 - **Restart**: a dialog offers *Restart Now* → `cx.set_restart_path(path)` + `cx.restart()`. GPUI quits (running the save-on-quit handlers, so open notes are saved), waits for the process to exit, then starts the new version. *Later* keeps working; the new version starts next time.
 - Limits: the checksum guards against damaged downloads, not a compromised GitHub account (no separate signing key yet). macOS packages are ad-hoc signed; the updater's download isn't quarantined, so no Gatekeeper prompt. Intel Macs and Linux ARM have no package yet.
-- Tests: `update.rs` unit tests (release JSON, version compare, package names, checksum lines); `kunotes-core/tests/update.rs` (swap, rollback, SHA-256, cleanup; an ignored test calls GitHub).
+- Tests: `update.rs` unit tests (release JSON, version compare, package names, checksum lines); `dotnote-core/tests/update.rs` (swap, rollback, SHA-256, cleanup; an ignored test calls GitHub).
 
 ---
 
@@ -523,11 +524,11 @@ When to save immediately (`save_now`):
 
 Files that aren't valid UTF-8 open read-only (`can_save = false`) and are never written.
 
-`atomic_write`: write to `.<name>.kunotes.tmp` in the same directory, `fsync`, then rename over the target. `std::fs::rename` replaces existing files on Windows too. The temp name starts with a dot, so the tree scanner skips it.
+`atomic_write`: write to `.<name>.dotnote.tmp` in the same directory, `fsync`, then rename over the target. `std::fs::rename` replaces existing files on Windows too. The temp name starts with a dot, so the tree scanner skips it.
 
 ### 7.2 Watcher (`watcher.rs`)
 
-- `watch_os` (no GPUI, tested with real files) runs `notify-debouncer-full` recursively on the vault with a 500ms debounce. It reports a change only if some event path is visible, meaning no part below the vault root starts with `.`. That skips `.git` churn and our own `.name.kunotes.tmp` save files.
+- `watch_os` (no GPUI, tested with real files) runs `notify-debouncer-full` recursively on the vault with a 500ms debounce. It reports a change only if some event path is visible, meaning no part below the vault root starts with `.`. That skips `.git` churn and our own `.name.dotnote.tmp` save files.
 - Event paths are compared against both the opened path and its canonical form, because the OS may report the real path (macOS `/var` → `/private/var`, symlinked vaults). Canonicalizing alone would break Windows (`\\?\` prefix).
 - `start` sends signals over a `futures` channel to a `cx.spawn` loop that calls `VaultStore::refresh`, which scans in the background.
 - After each rescan, `forget_missing_paths` drops a selection or expanded folder whose path is gone. A note deleted outside the app therefore closes, and the workspace doesn't write it back.
@@ -561,7 +562,7 @@ Use GPUI's `secondary-` modifier, which is `cmd` on macOS and `ctrl` on Windows 
 | Rename selection | `f2` (all platforms; `enter` opens/toggles instead) | FileTree |
 | Quit | `cmd-q` (macOS), `ctrl-q` (Linux), `alt-f4` (Windows, provided by the OS) | global |
 
-### 8.2 Filenames (`kunotes_core::names`)
+### 8.2 Filenames (`dotnote_core::names`)
 
 Rename and create reject, with a readable error:
 - empty or whitespace-only names, `.` and `..`,
@@ -593,7 +594,7 @@ A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa
 
 ## 9. Error handling
 
-- `kunotes-core` returns `Result<T, CoreError>` (`thiserror`), with variants such as `NameInvalid(reason)`, `AlreadyExists(path)`, `MoveIntoSelf`, and `Io(io::Error)`.
+- `dotnote-core` returns `Result<T, CoreError>` (`thiserror`), with variants such as `NameInvalid(reason)`, `AlreadyExists(path)`, `MoveIntoSelf`, and `Io(io::Error)`.
 - `VaultStore` turns errors into `VaultEvent::Error`, and `Workspace` shows them with `push_notification`.
 - Nothing is silently swallowed except "file vanished during scan", which is expected during external churn.
 

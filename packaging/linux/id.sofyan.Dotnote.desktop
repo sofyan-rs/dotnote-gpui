@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Dotnote
+GenericName=Markdown Notes
+Comment=A minimal markdown vault app
+Exec=dotnote
+Icon=dotnote
+Terminal=false
+Categories=Office;TextEditor;Utility;
+Keywords=notes;markdown;vault;
+StartupWMClass=id.sofyan.Dotnote

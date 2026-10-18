@@ -4,9 +4,9 @@ This file guides Claude Code (claude.ai/code) when working in this repository.
 
 ## Overview
 
-KuNotes is a minimal, cross-platform (**macOS, Windows, Linux — Fedora is the Linux target**) markdown vault app in Rust. It opens a folder on disk as a "vault". Files on disk are the only source of truth, with no database. UI is built with [gpui-kit](https://gpui-kit.com/) (`gpui-kit = "0.7.1"`), which re-exports GPUI. Don't add `gpui` as a direct dependency.
+Dotnote is a minimal, cross-platform (**macOS, Windows, Linux — Fedora is the Linux target**) markdown vault app in Rust. It opens a folder on disk as a "vault". Files on disk are the only source of truth, with no database. UI is built with [gpui-kit](https://gpui-kit.com/) (`gpui-kit = "0.7.1"`), which re-exports GPUI. Don't add `gpui` as a direct dependency.
 
-Scope is intentionally minimal: open a folder, browse it, edit markdown. There are no wikilinks, backlinks, tags, graph, or plugins. (Tabs are in scope; split editor groups are not. Optional git sync with the user's own remote is in scope, using the installed `git`; no KuNotes sync service.) Push back on scope creep.
+Scope is intentionally minimal: open a folder, browse it, edit markdown. There are no wikilinks, backlinks, tags, graph, or plugins. (Tabs are in scope; split editor groups are not. Optional git sync with the user's own remote is in scope, using the installed `git`; no Dotnote sync service.) Push back on scope creep.
 
 **Status:** docs-first. Check `docs/implementation/PLAN.md` for the current phase before writing code, and tick checkboxes there as items land.
 
@@ -31,8 +31,8 @@ The repo is indexed in codebase-memory as project `Users-sofyan-Dev-Project-Pers
 ## Build / Test
 
 ```bash
-cargo run -p kunotes                                   # app (debug)
-cargo test -p kunotes-core                             # fast pure-logic tests
+cargo run -p dotnote                                   # app (debug)
+cargo test -p dotnote-core                             # fast pure-logic tests
 cargo test --workspace
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings  # must be clean
@@ -42,15 +42,15 @@ Rust ≥ 1.92 (required by gpui-kit). Windows needs the MSVC toolchain. Fedora n
 
 ## Layout
 
-- `crates/kunotes-core/`: **pure logic, no gpui.** Covers scan (`node.rs`), file ops and `atomic_write` (`fs_ops.rs`), filename validation (`names.rs`), relative path and breadcrumb (`paths.rs`), formatter transforms (`format.rs`), line/col and char count (`cursor.rs`), `\n`/`\r\n` preservation (`line_ending.rs`), file flatten/filter and tree `visible_rows` (`search.rs`), `Settings` (`settings.rs`), git sync (`git.rs`, runs the installed `git`), app updates (`update.rs`, GitHub Releases via the installed `curl`), locked notes (`lock.rs`, age encryption), and Live-mode logic (`live.rs` spans, `live_view.rs` per-line drawing and position mapping, `live_buffer.rs` text/selection/undo, `live_table.rs` tables). Anything that can be written without gpui goes here, with tests.
-- `crates/kunotes/`: the GPUI app.
+- `crates/dotnote-core/`: **pure logic, no gpui.** Covers scan (`node.rs`), file ops and `atomic_write` (`fs_ops.rs`), filename validation (`names.rs`), relative path and breadcrumb (`paths.rs`), formatter transforms (`format.rs`), line/col and char count (`cursor.rs`), `\n`/`\r\n` preservation (`line_ending.rs`), file flatten/filter and tree `visible_rows` (`search.rs`), `Settings` (`settings.rs`), git sync (`git.rs`, runs the installed `git`), app updates (`update.rs`, GitHub Releases via the installed `curl`), locked notes (`lock.rs`, age encryption), and Live-mode logic (`live.rs` spans, `live_view.rs` per-line drawing and position mapping, `live_buffer.rs` text/selection/undo, `live_table.rs` tables). Anything that can be written without gpui goes here, with tests.
+- `crates/dotnote/`: the GPUI app.
   - `vault_store.rs`: the `VaultStore` entity, the single source of truth, which emits `VaultEvent`.
   - `watcher.rs`: `notify` events go through a channel to `refresh`.
   - `git_sync.rs`: the `GitSync` entity (when to sync, status); UI in `ui/git_sync_dialog.rs` and `ui/sidebar/sync_footer.rs`.
   - `updater.rs`: the `Updater` entity (check GitHub Releases at launch / on demand, install); dialogs in `ui/update_dialog.rs`.
   - `vault_lock.rs`: the `VaultLock` entity (vault key in memory, auto-lock); UI in `ui/unlock_dialog.rs`, `ui/change_password_dialog.rs`, `ui/note_lock.rs`, `ui/editor/locked.rs`.
   - `platform.rs`: the **only** place for `#[cfg(target_os)]` and OS wording.
-  - `ui/`: views grouped by feature: `workspace.rs`, `title_bar.rs`, `sidebar/` (`mod.rs`, `file_tree.rs`, `inline_edit.rs`, `keyboard.rs`, `context_menu.rs`), `editor/` (`mod.rs` = EditorPane, `drawing.rs` = header/render, `saving.rs` = autosave + preview refresh, `formatting.rs` = toolbar commands/images/task toggle, `markdown_style.rs` = Source styling, `view_mode_switch.rs`, `formatter_bar.rs`, `preview.rs`, `status_bar.rs`, `edit_menu.rs` = right-click menu of Live and Source, `live/` = custom Live editor: `mod.rs`, `keys.rs`, `input.rs`, `layout.rs`, `style.rs`, `table.rs`, `element.rs`), `editor_area/` (tabs: `mod.rs` = EditorArea, `tab_bar.rs`), `quick_switcher.rs`, `dialogs.rs`, `empty_state.rs`. Tab rules are pure in `kunotes-core/src/tabs.rs`.
+  - `ui/`: views grouped by feature: `workspace.rs`, `title_bar.rs`, `sidebar/` (`mod.rs`, `file_tree.rs`, `inline_edit.rs`, `keyboard.rs`, `context_menu.rs`), `editor/` (`mod.rs` = EditorPane, `drawing.rs` = header/render, `saving.rs` = autosave + preview refresh, `formatting.rs` = toolbar commands/images/task toggle, `markdown_style.rs` = Source styling, `view_mode_switch.rs`, `formatter_bar.rs`, `preview.rs`, `status_bar.rs`, `edit_menu.rs` = right-click menu of Live and Source, `live/` = custom Live editor: `mod.rs`, `keys.rs`, `input.rs`, `layout.rs`, `style.rs`, `table.rs`, `element.rs`), `editor_area/` (tabs: `mod.rs` = EditorArea, `tab_bar.rs`), `quick_switcher.rs`, `dialogs.rs`, `empty_state.rs`. Tab rules are pure in `dotnote-core/src/tabs.rs`.
 
 Structure rules (ARCHITECTURE §3): the codebase must stay readable for engineers new to Rust.
 - Start with one file; make a folder (with `mod.rs`) only when a module needs several files.
@@ -58,7 +58,7 @@ Structure rules (ARCHITECTURE §3): the codebase must stay readable for engineer
 - At most two folder levels under `src/`. Files under ~400 lines.
 - Every file starts with a `//!` purpose comment.
 - Private by default.
-- Unit tests go in the same file; filesystem tests go in `crates/kunotes-core/tests/`.
+- Unit tests go in the same file; filesystem tests go in `crates/dotnote-core/tests/`.
 - Prefer plain, explicit code over clever generics or macros. Add short comments where Rust or GPUI idioms aren't obvious (lifetimes, `cx.listener`, entity updates).
 
 ## Editor modes
@@ -68,7 +68,7 @@ Live (realtime formatter, the default), Source (highlighted raw markdown), Split
 ## Rules
 
 - **Data safety:**
-  - User files are written only through `kunotes_core::fs_ops::atomic_write`.
+  - User files are written only through `dotnote_core::fs_ops::atomic_write`.
   - A locked note (`.md.age`) is never written in plain text: save it with `lock::write_note`.
   - Deletes go only through the `trash` crate. Never `remove_file` or `remove_dir_all` vault content.
   - Flush pending saves on file switch, vault switch, window close, and app quit.
@@ -86,7 +86,7 @@ Live (realtime formatter, the default), Source (highlighted raw markdown), Split
   - Scope keybindings with `key_context` (`Workspace`, `FileTree`, `EditorPane`).
   - The delete key is bound only in `FileTree`.
 - **Errors:**
-  - `kunotes-core` returns `CoreError` (`thiserror`).
+  - `dotnote-core` returns `CoreError` (`thiserror`).
   - The app surfaces user-facing failures with `VaultEvent::Error` → `push_notification`.
   - Don't silently `let _ =` or `.ok()` failed I/O. Don't call `unwrap()` in app code paths.
   - Use `log`, not `println!`.

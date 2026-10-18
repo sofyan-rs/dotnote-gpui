@@ -1767,6 +1767,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotnote"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "dotnote-core",
+ "env_logger",
+ "futures",
+ "gpui-kit",
+ "log",
+ "notify",
+ "notify-debouncer-full",
+ "opener",
+ "tempfile",
+ "winresource",
+]
+
+[[package]]
+name = "dotnote-core"
+version = "1.0.0"
+dependencies = [
+ "age",
+ "dirs 7.0.0",
+ "natord",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "trash",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4185,39 +4218,6 @@ checksum = "07293a4e297ac234359b510362495713f75ea345d5307140414f20c69ffeb087"
 dependencies = [
  "bitflags 2.13.2",
  "libc",
-]
-
-[[package]]
-name = "kunotes"
-version = "0.1.2"
-dependencies = [
- "anyhow",
- "env_logger",
- "futures",
- "gpui-kit",
- "kunotes-core",
- "log",
- "notify",
- "notify-debouncer-full",
- "opener",
- "tempfile",
- "winresource",
-]
-
-[[package]]
-name = "kunotes-core"
-version = "0.1.2"
-dependencies = [
- "age",
- "dirs 7.0.0",
- "natord",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.21",
- "trash",
- "unicode-segmentation",
 ]
 
 [[package]]

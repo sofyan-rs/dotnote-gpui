@@ -37,18 +37,18 @@ sudo dnf install -y gcc gcc-c++ clang cmake pkgconf-pkg-config \
 ## 2. Build and run
 
 ```bash
-cargo run -p kunotes                       # debug build of the app
-cargo run -p kunotes --release             # release build
-RUST_LOG=kunotes=debug cargo run -p kunotes  # verbose logging
+cargo run -p dotnote                       # debug build of the app
+cargo run -p dotnote --release             # release build
+RUST_LOG=dotnote=debug cargo run -p dotnote  # verbose logging
 cargo test --workspace                     # all tests
-cargo test -p kunotes-core                 # fast pure-logic tests only
+cargo test -p dotnote-core                 # fast pure-logic tests only
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Windows PowerShell: `$env:RUST_LOG="kunotes=debug"; cargo run -p kunotes`
+Windows PowerShell: `$env:RUST_LOG="dotnote=debug"; cargo run -p dotnote`
 
-**Separate dev settings:** `KUNOTES_CONFIG_DIR=/tmp/kn-dev cargo run -p kunotes` keeps settings (last vault, view mode) in that folder instead of your real ones. Use it when testing with a throwaway vault while your normal KuNotes is in use.
+**Separate dev settings:** `DOTNOTE_CONFIG_DIR=/tmp/kn-dev cargo run -p dotnote` keeps settings (last vault, view mode) in that folder instead of your real ones. Use it when testing with a throwaway vault while your normal Dotnote is in use.
 
 The first build is slow because GPUI is large. Framework crates are built at `opt-level = 3` even in debug (see `[profile.dev.package]` in the root `Cargo.toml`), which makes the first build slower but keeps the debug app responsive.
 
@@ -58,16 +58,16 @@ A test vault: open `fixtures/sample-vault/`. Its `Example.md` uses every markdow
 
 | OS | Command | Output |
 |---|---|---|
-| macOS | `packaging/macos/bundle.sh` | `target/release/bundle/macos/KuNotes.app` + `.dmg` + `KuNotes-macos-arm64.zip` (updater package) |
-| Windows | `cargo build --release -p kunotes` | `target/release/kunotes.exe` (icon embedded) |
-| Fedora | `cargo build --release -p kunotes && cargo generate-rpm -p crates/kunotes` (`cargo install cargo-generate-rpm` once) | `target/generate-rpm/*.rpm` |
+| macOS | `packaging/macos/bundle.sh` | `target/release/bundle/macos/Dotnote.app` + `.dmg` + `Dotnote-macos-arm64.zip` (updater package) |
+| Windows | `cargo build --release -p dotnote` | `target/release/dotnote.exe` (icon embedded) |
+| Fedora | `cargo build --release -p dotnote && cargo generate-rpm -p crates/dotnote` (`cargo install cargo-generate-rpm` once) | `target/generate-rpm/*.rpm` |
 
-The icon master is `assets/icon/kunotes.png`. After changing it, run `packaging/make_icons.sh` (macOS) and commit the regenerated files.
+The icon master is `assets/icon/dotnote.png`. After changing it, run `packaging/make_icons.sh` (macOS) and commit the regenerated files.
 
 **Releasing:**
 1. Bump `version` in the root `Cargo.toml` (`[workspace.package]`), run `cargo build` so `Cargo.lock` follows, and commit (`chore(release): v0.2.0`).
 2. Tag and push: `git tag v0.2.0 && git push origin main v0.2.0`. The tag must match the `Cargo.toml` version or the workflow stops.
-3. The Release workflow builds all three packages, writes `SHA256SUMS`, and publishes a GitHub Release with generated notes. Installed copies of KuNotes find it at their next launch (or *Check for Updates…*) and offer to install it (ARCHITECTURE §6.13).
+3. The Release workflow builds all three packages, writes `SHA256SUMS`, and publishes a GitHub Release with generated notes. Installed copies of Dotnote find it at their next launch (or *Check for Updates…*) and offer to install it (ARCHITECTURE §6.13).
 
 Don't rename the release assets: the updater looks for those exact names. To test packaging without releasing, run the workflow manually from the Actions tab and download the artifacts.
 
@@ -76,8 +76,8 @@ Don't rename the release assets: the updater looks for those exact names. To tes
 ## 3. Project structure
 
 ```
-crates/kunotes-core/   library: pure logic, no GPUI (start at src/lib.rs)
-crates/kunotes/        app: main.rs → app.rs → ui/workspace.rs
+crates/dotnote-core/   library: pure logic, no GPUI (start at src/lib.rs)
+crates/dotnote/        app: main.rs → app.rs → ui/workspace.rs
   src/ui/sidebar/      file tree and sidebar header
   src/ui/editor/       editor pane, preview, formatter bar, status bar
 fixtures/              sample vault for manual testing
@@ -86,12 +86,12 @@ docs/                  architecture, plan, spike notes
 
 The full tree, the rules for adding files, and the "where does my code go?" table are in [ARCHITECTURE §3](./ARCHITECTURE.md#3-project-structure).
 
-**Rule of thumb:** if code can be written without `gpui`, it goes in `kunotes-core` with tests. UI files should mostly be layout and event wiring.
+**Rule of thumb:** if code can be written without `gpui`, it goes in `dotnote-core` with tests. UI files should mostly be layout and event wiring.
 
 ### Reading order for newcomers
 
-1. `crates/kunotes-core/src/lib.rs`, then any module with its tests at the bottom. The tests show how each function is meant to be used.
-2. `crates/kunotes/src/main.rs` → `app.rs` → `ui/workspace.rs`. This follows how the window is built.
+1. `crates/dotnote-core/src/lib.rs`, then any module with its tests at the bottom. The tests show how each function is meant to be used.
+2. `crates/dotnote/src/main.rs` → `app.rs` → `ui/workspace.rs`. This follows how the window is built.
 3. `vault_store.rs`, which is the shared state every view reads from.
 4. One feature folder, e.g. `ui/sidebar/`.
 
@@ -115,17 +115,17 @@ The full tree, the rules for adding files, and the "where does my code go?" tabl
 - Timers and debounces: store the `Task`. Dropping or replacing it cancels the work.
 - Key contexts: give focusable views a `key_context` (`Workspace`, `FileTree`, `EditorPane`) and scope keybindings to them.
 - Import from `gpui_kit::*` and `gpui_kit::component::…`. Don't add `gpui` as a direct dependency.
-- Icons: use `gpui_kit::assets::IconName`. gpui-kit embeds only ~100 icons by default, so a new icon must be added to `icon_assets!` in `crates/kunotes/src/assets.rs` or it renders blank. Watch the log for `could not find asset at path "icons/…"`.
+- Icons: use `gpui_kit::assets::IconName`. gpui-kit embeds only ~100 icons by default, so a new icon must be added to `icon_assets!` in `crates/dotnote/src/assets.rs` or it renders blank. Watch the log for `could not find asset at path "icons/…"`.
 
 ### Cross-platform rules
 - Keybindings use `secondary-` (cmd on macOS, ctrl elsewhere). Never `cmd-` or `ctrl-` alone unless the binding really is OS-specific, and then gate it with `#[cfg]`.
 - User-facing OS terms (Finder/Explorer, Trash/Recycle Bin) come from `platform.rs`, never inline strings.
 - `#[cfg(target_os = "…")]` belongs only in `platform.rs` (and tests that need it). Everything else stays platform-neutral.
 - Don't assume a case-sensitive filesystem or `\n` line endings. Preserve what's on disk.
-- Filenames must pass `kunotes_core::names::validate_name`.
+- Filenames must pass `dotnote_core::names::validate_name`.
 
 ### Data safety (non-negotiable)
-- Every write to a user file goes through `kunotes_core::fs_ops::atomic_write`.
+- Every write to a user file goes through `dotnote_core::fs_ops::atomic_write`.
 - Deletes go through `trash`. **Never** call `remove_file` or `remove_dir_all` on vault content.
 - Any change that touches loading or saving needs a manual test: type, then switch files or quit within 500ms, then reopen and check that nothing was lost.
 
@@ -135,17 +135,17 @@ The full tree, the rules for adding files, and the "where does my code go?" tabl
 
 | Layer | How |
 |---|---|
-| `kunotes-core` | Plain `#[test]`. Filesystem tests use `tempfile::tempdir()`. OS-specific cases use `#[cfg(unix)]` / `#[cfg(windows)]`. |
+| `dotnote-core` | Plain `#[test]`. Filesystem tests use `tempfile::tempdir()`. OS-specific cases use `#[cfg(unix)]` / `#[cfg(windows)]`. |
 | UI behavior | Headless UI tests with gpui-kit `test-support` (`#[gpui_kit::test]`, `TestWindowExt::click/press/drag_to/input`). Open the real `Workspace` on a `tempfile` vault, call `SettingsStore::init_in_memory` so the user's settings are never touched, and assert on disk/state. Mark elements to find with `.test_support()` (before `track_focus`). Example: `ui/sidebar/file_tree_tests.rs`. Put them in `<view>_tests.rs` next to the view. |
 | Manual | The feature checklist in PLAN.md, per OS, before each release. |
 
-Every bug fix in `kunotes-core` gets a regression test. New format transforms need tests for empty selections, multi-byte text, and the start and end of the document.
+Every bug fix in `dotnote-core` gets a regression test. New format transforms need tests for empty selections, multi-byte text, and the start and end of the document.
 
 ---
 
 ## 6. Errors and logging
 
-- `kunotes-core`: return `Result<_, CoreError>` (`thiserror`).
+- `dotnote-core`: return `Result<_, CoreError>` (`thiserror`).
 - App: `anyhow` is fine internally. User-visible failures become `VaultEvent::Error`, which shows as a notification.
 - Use `log::{warn, error, debug}`, not `println!`.
 
@@ -168,7 +168,7 @@ Every bug fix in `kunotes-core` gets a regression test. New format transforms ne
 ### PR checklist
 - [ ] `cargo fmt`, `clippy -D warnings`, and `cargo test --workspace` pass locally.
 - [ ] CI is green on macOS, Windows, and Fedora.
-- [ ] New logic in `kunotes-core` has tests.
+- [ ] New logic in `dotnote-core` has tests.
 - [ ] No new `cfg(target_os)` outside `platform.rs`.
 - [ ] Data-safety rules (§4) are respected. Save/load changes were tested manually.
 - [ ] `docs/implementation/PLAN.md` checkboxes are updated. ARCHITECTURE.md is updated if the design changed.
@@ -178,4 +178,4 @@ Every bug fix in `kunotes-core` gets a regression test. New format transforms ne
 
 ## 9. Scope guard
 
-KuNotes is intentionally minimal: **open a folder, browse it, edit markdown.** Proposals for wikilinks, backlinks, tags, graph, plugins, or sync should start as a discussion issue, not a PR.
+Dotnote is intentionally minimal: **open a folder, browse it, edit markdown.** Proposals for wikilinks, backlinks, tags, graph, plugins, or sync should start as a discussion issue, not a PR.

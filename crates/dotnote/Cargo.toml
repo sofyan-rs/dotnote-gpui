@@ -1,0 +1,48 @@
+[package]
+name = "dotnote"
+description = "A minimal, cross-platform markdown vault app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+dotnote-core.workspace = true
+gpui-kit.workspace = true
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+opener.workspace = true
+notify.workspace = true
+notify-debouncer-full.workspace = true
+futures.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+# Embeds the app icon into dotnote.exe (see build.rs).
+winresource = "0.1"
+
+[dev-dependencies]
+# `test-support` turns on gpui-kit's headless UI test harness (click, press, drag).
+gpui-kit = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+
+# Fedora package: `cargo generate-rpm -p crates/dotnote` (after a release build).
+[package.metadata.generate-rpm]
+name = "dotnote"
+summary = "A minimal, cross-platform markdown vault app"
+license = "Apache-2.0"
+assets = [
+    { source = "target/release/dotnote", dest = "/usr/bin/dotnote", mode = "755" },
+    { source = "packaging/linux/id.sofyan.Dotnote.desktop", dest = "/usr/share/applications/id.sofyan.Dotnote.desktop", mode = "644" },
+    { source = "packaging/linux/icons/hicolor/16x16/apps/dotnote.png", dest = "/usr/share/icons/hicolor/16x16/apps/dotnote.png", mode = "644" },
+    { source = "packaging/linux/icons/hicolor/32x32/apps/dotnote.png", dest = "/usr/share/icons/hicolor/32x32/apps/dotnote.png", mode = "644" },
+    { source = "packaging/linux/icons/hicolor/48x48/apps/dotnote.png", dest = "/usr/share/icons/hicolor/48x48/apps/dotnote.png", mode = "644" },
+    { source = "packaging/linux/icons/hicolor/64x64/apps/dotnote.png", dest = "/usr/share/icons/hicolor/64x64/apps/dotnote.png", mode = "644" },
+    { source = "packaging/linux/icons/hicolor/128x128/apps/dotnote.png", dest = "/usr/share/icons/hicolor/128x128/apps/dotnote.png", mode = "644" },
+    { source = "packaging/linux/icons/hicolor/256x256/apps/dotnote.png", dest = "/usr/share/icons/hicolor/256x256/apps/dotnote.png", mode = "644" },
+    { source = "packaging/linux/icons/hicolor/512x512/apps/dotnote.png", dest = "/usr/share/icons/hicolor/512x512/apps/dotnote.png", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+vulkan-loader = "*"

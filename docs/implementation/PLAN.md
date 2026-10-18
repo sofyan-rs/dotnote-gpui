@@ -1,6 +1,6 @@
 # Implementation Plan
 
-This plan builds KuNotes in phases. Each phase ends with something runnable and testable on **macOS, Windows, and Linux (Fedora)**. Design details are in [ARCHITECTURE.md](../ARCHITECTURE.md). Section numbers below (§) refer to that file.
+This plan builds Dotnote in phases. Each phase ends with something runnable and testable on **macOS, Windows, and Linux (Fedora)**. Design details are in [ARCHITECTURE.md](../ARCHITECTURE.md). Section numbers below (§) refer to that file.
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -10,7 +10,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 **Goal:** a hello-world gpui-kit window that builds on all three OSes in CI, plus confirmed answers to every open question in §11.
 
-- [x] `cargo new` workspace with `crates/kunotes-core` (lib) and `crates/kunotes` (bin). Edition 2024, `rust-version = "1.92"`.
+- [x] `cargo new` workspace with `crates/dotnote-core` (lib) and `crates/dotnote` (bin). Edition 2024, `rust-version = "1.92"`.
 - [x] Workspace `Cargo.toml`: shared `[workspace.dependencies]`, and `[profile.dev.package]` opt-level 3 for `gpui-pre`, `gpui-component`, `gpui-kit`, `gpui-kit-assets`, `gpui-pre-macros`, `gpui-pre-platform`, `rustybuzz`, `taffy`, `ttf-parser` (from the gpui-kit install guide).
 - [x] `fixtures/sample-vault/`: nested folders, hidden files, non-md files, and an `Example.md` that uses every markdown element in §6.5 (headings, emphasis, inline code, code block, nested lists, task list, quote, link, rule). Used for manual testing and screenshots.
 - [x] `rust-toolchain.toml` pinned to 1.99.0 (≥ 1.92), with components `rustfmt` and `clippy`.
@@ -34,7 +34,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
-## Phase 1: `kunotes-core` (pure logic with tests) ✅
+## Phase 1: `dotnote-core` (pure logic with tests) ✅
 
 **Goal:** all non-UI behavior, covered by unit tests. No GPUI dependency.
 
@@ -66,7 +66,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `line_col` with `\n` and `\r\n`. `char_count` with emoji ZWJ sequences and flags.
 - [x] Settings round-trip and corrupt-file fallback.
 
-**Done when:** `cargo test -p kunotes-core` passes on all three OSes in CI.
+**Done when:** `cargo test -p dotnote-core` passes on all three OSes in CI.
 
 ---
 
@@ -154,7 +154,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Phase 6: Live external sync ✅
 
-- [x] `watcher.rs`: `notify-debouncer-full` recursive watch (500ms), then a `futures` channel, a `cx.spawn` loop, and `VaultStore::refresh`. Changes that only touch hidden paths (`.git`, our `.kunotes.tmp` files) are ignored.
+- [x] `watcher.rs`: `notify-debouncer-full` recursive watch (500ms), then a `futures` channel, a `cx.spawn` loop, and `VaultStore::refresh`. Changes that only touch hidden paths (`.git`, our `.dotnote.tmp` files) are ignored.
 - [x] Event paths are matched against both the vault path and its canonical path (macOS `/var` → `/private/var`, symlinked vaults).
 - [x] The watcher restarts on vault switch and is dropped on close.
 - [x] Watch failures (e.g. the Linux inotify limit) are logged and shown in one notification. The app keeps working.
@@ -171,9 +171,9 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## Phase 7: Polish and feature audit ✅ (manual OS checks pending)
 
 - [x] Feature checklist (below) filled in from tests and screenshots. Cells marked ⬜ need a person at the machine.
-- [x] Menus: macOS native menu bar (KuNotes, File, Edit, View). The Edit menu (Undo/Redo/Cut/Copy/Paste/Select All) dispatches the editor's own actions. Windows/Linux use the same list through `AppMenuBar`.
+- [x] Menus: macOS native menu bar (Dotnote, File, Edit, View). The Edit menu (Undo/Redo/Cut/Copy/Paste/Select All) dispatches the editor's own actions. Windows/Linux use the same list through `AppMenuBar`.
 - [x] Light and dark themes checked by screenshot (macOS).
-- [x] Large-vault check (release build, 10k notes): scan 37 ms (background), all-expanded tree rows 0.6 ms, switcher filter 0.8 ms. Benchmarks are in `crates/kunotes-core/tests/perf.rs` (`--ignored`).
+- [x] Large-vault check (release build, 10k notes): scan 37 ms (background), all-expanded tree rows 0.6 ms, switcher filter 0.8 ms. Benchmarks are in `crates/dotnote-core/tests/perf.rs` (`--ignored`).
 - [x] Large-note check (1 MB): the character count took 31 ms per keystroke, so it now runs in the background on the 150 ms preview throttle. Line/col is 0.2 ms.
 - [x] Drag and drop: invalid targets no longer highlight. Every row catches drops, which fixes a drop on a note row falling through and moving the item to the vault root (regression tests added).
 - [x] `env_logger` default level `warn`, `RUST_LOG` respected.
@@ -182,23 +182,23 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Phase 8: Packaging and release ✅ (signing pending)
 
-- [x] App icon: 1024px master at `assets/icon/kunotes.png`. `packaging/make_icons.sh` generates `.icns`, `.ico` (16–256), and hicolor PNGs (16–512).
-- [x] macOS: `packaging/macos/bundle.sh` → `KuNotes.app` (Info.plist with bundle ID `id.sofyan.KuNotes`, icon, ad-hoc signature) + `KuNotes-<version>-<arch>.dmg` with an Applications shortcut. Verified locally: Finder shows the icon and the bundle launches.
+- [x] App icon: 1024px master at `assets/icon/dotnote.png`. `packaging/make_icons.sh` generates `.icns`, `.ico` (16–256), and hicolor PNGs (16–512).
+- [x] macOS: `packaging/macos/bundle.sh` → `Dotnote.app` (Info.plist with bundle ID `id.sofyan.Dotnote`, icon, ad-hoc signature) + `Dotnote-<version>-<arch>.dmg` with an Applications shortcut. Verified locally: Finder shows the icon and the bundle launches.
 - [ ] macOS: Developer ID signing + notarization (needs an Apple Developer account). Until then, other Macs need right-click → Open the first time. Universal (arm64 + x86_64) build later if needed.
-- [x] Windows: icon and version info embedded in `kunotes.exe` (`build.rs` + `winresource`). Release builds have no console window. CI zips it as `KuNotes-windows-x64.zip`.
+- [x] Windows: icon and version info embedded in `dotnote.exe` (`build.rs` + `winresource`). Release builds have no console window. CI zips it as `Dotnote-windows-x64.zip`.
 - [ ] Windows: `.msi` installer (needs the WiX toolset on the runner) and code signing.
-- [x] Linux (Fedora): `packaging/linux/id.sofyan.KuNotes.desktop` + icons + binary packed by `cargo generate-rpm -p crates/kunotes` (metadata in `crates/kunotes/Cargo.toml`, requires `vulkan-loader`). The window `app_id` is `id.sofyan.KuNotes`, so Wayland matches the window to the `.desktop` file. Asset layout verified locally.
+- [x] Linux (Fedora): `packaging/linux/id.sofyan.Dotnote.desktop` + icons + binary packed by `cargo generate-rpm -p crates/dotnote` (metadata in `crates/dotnote/Cargo.toml`, requires `vulkan-loader`). The window `app_id` is `id.sofyan.Dotnote`, so Wayland matches the window to the `.desktop` file. Asset layout verified locally.
 - [x] `.github/workflows/release.yml`: a `v*` tag builds the `.dmg`, `.zip`, and `.rpm`, then publishes a GitHub Release with notes. Running it by hand builds artifacts only.
-- [x] Release workflow: the tag must match the `Cargo.toml` version; fixed updater asset names (`KuNotes-macos-arm64.zip`, `KuNotes-windows-x64.zip`, `KuNotes-fedora-x86_64.rpm`) + `SHA256SUMS`.
+- [x] Release workflow: the tag must match the `Cargo.toml` version; fixed updater asset names (`Dotnote-macos-arm64.zip`, `Dotnote-windows-x64.zip`, `Dotnote-fedora-x86_64.rpm`) + `SHA256SUMS`.
 - [x] In-app updates (ARCHITECTURE §6.13): check GitHub Releases at launch and via *Check for Updates…*, download with `curl`, verify SHA-256, swap the app (macOS `.app`, Windows exe) or `pkexec dnf install` (Fedora), then restart via `cx.restart()`. 6 unit + 4 filesystem tests; macOS bundle swap verified locally with a real `bundle.sh` zip.
 - [ ] Publish the first release (`v0.1.0`) and try a real update end to end on each OS (needs a second release, e.g. `v0.1.1`).
-- [ ] Root `README.md` with screenshots from each OS. (macOS done in `ss/`: Live, Split, a locked note; taken from a copy of `fixtures/sample-vault` with a temp `KUNOTES_CONFIG_DIR`. Windows and Fedora still to do.)
+- [ ] Root `README.md` with screenshots from each OS. (macOS done in `ss/`: Live, Split, a locked note; taken from a copy of `fixtures/sample-vault` with a temp `DOTNOTE_CONFIG_DIR`. Windows and Fedora still to do.)
 
 ## Post-v1 polish (done)
 
 - [x] Inline rename and new note/folder in the tree, like VS Code/Zed (`sidebar/inline_edit.rs`), replacing the rename dialog. New notes open with the editor focused. 8 UI tests cover F2 rename keeping `.md`, invalid and taken names, Escape, new items in the target folder, and click-away confirm/cancel.
 - [x] Quick switcher rebuilt as its own view, with a padded, centered search field and right-aligned folder labels (gpui-kit `Command` couldn't be padded). Arrow-key test added.
-- [x] Tabs like VS Code (`ui/editor_area/`, rules in `kunotes-core/src/tabs.rs`): preview tabs, pin, Close / Others / to the Right / Saved / All, drag to reorder, copy path, reveal, unsaved dot, saved on tab switch, restored on launch. 13 core unit tests + 9 UI tests.
+- [x] Tabs like VS Code (`ui/editor_area/`, rules in `dotnote-core/src/tabs.rs`): preview tabs, pin, Close / Others / to the Right / Saved / All, drag to reorder, copy path, reveal, unsaved dot, saved on tab switch, restored on launch. 13 core unit tests + 9 UI tests.
 - [x] Testing note: UI test windows are activated (`window.activate_window()` in `test_helpers`), because GPUI only reports focus loss in an active window.
 
 ## Phase 9: Live mode stage A, styled source (v1.5) ✅
@@ -206,7 +206,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 **Goal:** a formatted writing view on the same buffer (§6.9 stage A). Becomes the default mode.
 
 - [x] Live segment first in the view-mode switch + `secondary-1`, View menu, cycle order Live → Source → Split → Preview. Default `view_mode` is Live for new settings files.
-- [x] `kunotes-core/src/live.rs`: markdown parts with byte ranges (9 unit tests).
+- [x] `dotnote-core/src/live.rs`: markdown parts with byte ranges (9 unit tests).
 - [x] `ui/editor/markdown_style.rs`: one `InputHighlighter` for Live and Source (theme colors; Live fades markers, bolds headings, uses the UI font). 3 unit tests. (Since Phase 10 it styles Source/Split only.)
 - [x] Cursor, selection, and buffer carry over when switching Live ⇄ Source (same `EditorState`).
 - [x] Formatter bar and editor shortcuts work in Live.
@@ -218,8 +218,8 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 **Goal:** Obsidian-style live preview (§6.9), replacing stage A as the Live implementation.
 
-- [x] `kunotes-core::live_view`: lines with spans, per-line drawn text with markers hidden unless revealed, line kinds, drawn ⇄ file position mapping. 9 unit tests.
-- [x] `kunotes-core::live_buffer`: text + selection, grapheme and word movement, select word/line, delete (char, word, to line start), Enter list continuation, task toggle, undo/redo with typing grouped. 15 unit tests (emoji, CJK).
+- [x] `dotnote-core::live_view`: lines with spans, per-line drawn text with markers hidden unless revealed, line kinds, drawn ⇄ file position mapping. 9 unit tests.
+- [x] `dotnote-core::live_buffer`: text + selection, grapheme and word movement, select word/line, delete (char, word, to line start), Enter list continuation, task toggle, undo/redo with typing grouped. 15 unit tests (emoji, CJK).
 - [x] `ui/editor/live/layout.rs` + `style.rs`: per-line shaped text with styled runs, heading sizes, soft wrap, hit-testing, Up/Down at a kept x, selection rectangles. Styled to match the Preview.
 - [x] `element.rs`: paint text, caret, selection, checkbox, rule, code background, quote bar, inline-code background, placeholder; scroll-to-caret.
 - [x] `input.rs`: `EntityInputHandler` (typing, IME marked text, UTF-16 ⇄ UTF-8). Mouse in `mod.rs`: click, drag, double/triple click, shift-click.
@@ -228,7 +228,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] Tables in Live drawn as a grid like Preview (raw markdown while the cursor is in the table). Core tests + screenshot.
 - [x] Toolbar: strikethrough, H3, task list, table, image. Images are copied into `.img` next to the note and shown in Live and Preview. Core + UI tests.
 - [x] Right-click menus: Live and Source share one (clipboard, formatting, select all); Preview has Copy and Select All; the sidebar's empty space has New Note / New Folder / Reveal for the vault root. UI tests.
-- [x] Formatter bar reuses `kunotes_core::format` on the Live buffer.
+- [x] Formatter bar reuses `dotnote_core::format` on the Live buffer.
 - [x] Live and Source/Split hand the text over on mode switch; file bytes unchanged (UI test).
 - [x] Same content padding in Live, Source and Preview (measured on screenshots).
 - [ ] Page up/down, Shift-Tab outdent, Cmd/Ctrl+click opens links.
@@ -243,7 +243,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 **Goal:** optional per-vault sync through the user's own git remote (§6.11).
 
-- [x] `kunotes-core::git`: connect (init, `.gitignore`, remote, first merge), sync (commit, fetch, merge, push), conflict copies, quit push with timeout, readable errors. Integration tests with a local bare remote.
+- [x] `dotnote-core::git`: connect (init, `.gitignore`, remote, first merge), sync (commit, fetch, merge, push), conflict copies, quit push with timeout, readable errors. Integration tests with a local bare remote.
 - [x] `GitSync` entity: sync on open, 60 s after edits, every 5 min, on click, on quit; one at a time; saves open notes first.
 - [x] Sidebar footer status + Git Sync dialog (address, turn on/off).
 - [x] Open notes reload after a pull (unsaved typing wins). UI tests.
@@ -253,7 +253,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 **Goal:** encrypt notes that hold credentials (§6.12).
 
-- [x] `kunotes-core::lock`: vault password → encrypted vault key, encrypt/decrypt, lock/unlock a note, names (`.md.age`). Filesystem tests.
+- [x] `dotnote-core::lock`: vault password → encrypted vault key, encrypt/decrypt, lock/unlock a note, names (`.md.age`). Filesystem tests.
 - [x] `VaultLock`: unlock/set password in the background, auto-lock after 5 min, lock now (`secondary-shift-l`), forget on vault switch.
 - [x] Editor: lock screen, encrypted autosave, editors rebuilt empty on lock. Tree/tab lock icons, *Lock Note* / *Remove Lock* menu, header lock button.
 - [x] Password dialog (set twice with warning / unlock, wrong password message). UI test.
@@ -320,10 +320,10 @@ Legend: ✅ verified on that OS (UI/unit test run there, or screenshot) · 🧪 
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| gpui-kit is pre-1.0 and pins a GPUI snapshot (`gpui-pre`), so APIs change between minors | Breakage on upgrade | Pin the exact version in `Cargo.lock`. Upgrade deliberately in its own PR. Keep UI glue thin and logic in `kunotes-core`. |
+| gpui-kit is pre-1.0 and pins a GPUI snapshot (`gpui-pre`), so APIs change between minors | Breakage on upgrade | Pin the exact version in `Cargo.lock`. Upgrade deliberately in its own PR. Keep UI glue thin and logic in `dotnote-core`. |
 | Editor component lacks a selection/replace API | Formatter bar blocked | Found in the Phase 0 spike. Fallback: `set_value` + cursor restore (loses undo granularity), or contribute upstream. |
 | TextView doesn't render task lists | Preview feature gap | pulldown-cmark custom renderer (§6.5). |
 | Linux portal/Vulkan variability | Picker or window fails on some setups | Target Fedora Workstation. Document requirements. Show a clear error when the picker fails. Test on Fedora Workstation (GNOME, Wayland) and the Fedora KDE spin. |
-| Live stage B editor is a large custom component (cursor, selection, IME, undo, wrap) | Delays v2; subtle editing bugs | Ship stage A first. Keep pure logic in `kunotes-core::live` with heavy tests. Spike IME in Phase 0. Fall back to stage A behind a setting if a platform lags. |
+| Live stage B editor is a large custom component (cursor, selection, IME, undo, wrap) | Delays v2; subtle editing bugs | Ship stage A first. Keep pure logic in `dotnote-core::live` with heavy tests. Spike IME in Phase 0. Fall back to stage A behind a setting if a platform lags. |
 | Watcher noise from our own saves | Extra rescans | Rescans run in the background and are debounced. Optimize only if profiling shows a problem. |
 | Windows path quirks (case-insensitivity, reserved names, long paths) | Rename/move bugs | `names.rs` validation, case-only rename handling, CI tests on Windows. |

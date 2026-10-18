@@ -34,9 +34,9 @@ let editor = cx.new(|cx| {
 | Focus | `focus(window, cx)` | |
 | Events | `InputEvent::{Change, PressEnter{secondary, shift}, Focus, Blur}` | |
 
-⚠️ There's **no public "replace byte range"** method. The formatter bar has to call `set_selected_range(edit.range)`, then `replace(edit.replacement)`, then `set_selected_range(edit.new_selection)`. `kunotes_core::format` already uses byte offsets, which matches.
+⚠️ There's **no public "replace byte range"** method. The formatter bar has to call `set_selected_range(edit.range)`, then `replace(edit.replacement)`, then `set_selected_range(edit.new_selection)`. `dotnote_core::format` already uses byte offsets, which matches.
 
-Status bar: compute Ln/Col with our own `kunotes_core::cursor::line_col(text, cursor())`, so the column units are under our control.
+Status bar: compute Ln/Col with our own `dotnote_core::cursor::line_col(text, cursor())`, so the column units are under our control.
 
 ## 2. Highlight theming (Live stage A) ⚠️
 
@@ -151,5 +151,5 @@ cx.spawn(async move |this, cx| if let Ok(Ok(Some(paths))) = rx.await { .. }).det
 ## App updates findings
 
 - **Restart:** `cx.set_restart_path(path)` then `cx.restart()` (gpui-pre `App`). Each platform spawns a helper that waits for this process to exit, then starts `path` (macOS: `bash` loop + `open <App>.app`; Linux: `bash` loop + exec; Windows: a PowerShell loop + `Start-Process`). It quits through the normal path, so `on_app_quit` handlers (saving notes, settings) still run.
-- **`app_path()`** is `current_exe()` on Windows and Linux. On Linux, after the rpm replaces `/usr/bin/kunotes`, `current_exe()` of the running process can read `… (deleted)`, so the updater always passes the restart path explicitly.
+- **`app_path()`** is `current_exe()` on Windows and Linux. On Linux, after the rpm replaces `/usr/bin/dotnote`, `current_exe()` of the running process can read `… (deleted)`, so the updater always passes the restart path explicitly.
 

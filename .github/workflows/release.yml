@@ -3,9 +3,9 @@ name: Release
 # Push a tag like `v0.1.0` to build all packages and publish a GitHub Release.
 # "Run workflow" (manual) builds the same packages as downloadable artifacts only.
 #
-# The in-app updater (crates/kunotes-core/src/update.rs) looks for these exact
+# The in-app updater (crates/dotnote-core/src/update.rs) looks for these exact
 # asset names in the latest release, plus SHA256SUMS:
-#   KuNotes-macos-arm64.zip, KuNotes-windows-x64.zip, KuNotes-fedora-x86_64.rpm
+#   Dotnote-macos-arm64.zip, Dotnote-windows-x64.zip, Dotnote-fedora-x86_64.rpm
 on:
   push:
     tags: ["v*"]
@@ -56,17 +56,17 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p kunotes
+      - run: cargo build --release -p dotnote
       - name: Zip the app
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/release/kunotes.exe dist/KuNotes.exe
-          Compress-Archive -Path dist/KuNotes.exe -DestinationPath KuNotes-windows-x64.zip
+          Copy-Item target/release/dotnote.exe dist/Dotnote.exe
+          Compress-Archive -Path dist/Dotnote.exe -DestinationPath Dotnote-windows-x64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: KuNotes-windows-x64.zip
+          path: Dotnote-windows-x64.zip
 
   fedora:
     name: Fedora (.rpm)
@@ -83,15 +83,15 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p kunotes
+      - run: cargo build --release -p dotnote
       - run: cargo install cargo-generate-rpm --locked
-      - run: cargo generate-rpm -p crates/kunotes
+      - run: cargo generate-rpm -p crates/dotnote
       # A fixed name, so the updater can find it in any release.
-      - run: cp target/generate-rpm/*.rpm KuNotes-fedora-x86_64.rpm
+      - run: cp target/generate-rpm/*.rpm Dotnote-fedora-x86_64.rpm
       - uses: actions/upload-artifact@v4
         with:
           name: fedora
-          path: KuNotes-fedora-x86_64.rpm
+          path: Dotnote-fedora-x86_64.rpm
 
   publish:
     name: Publish GitHub Release

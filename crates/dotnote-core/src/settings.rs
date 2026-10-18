@@ -1,0 +1,131 @@
+//! User settings saved between launches, stored as JSON in the OS config folder
+//! (e.g. `~/Library/Application Support/dotnote/settings.json` on macOS).
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::error::Result;
+use crate::fs_ops::atomic_write;
+
+/// How the editor pane shows the current note.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ViewMode {
+    /// Formatted while typing: markers dimmed, headings and emphasis styled.
+    #[default]
+    Live,
+    /// Raw markdown with syntax highlighting.
+    Source,
+    /// Source and preview side by side.
+    Split,
+    /// Read-only rendered document.
+    Preview,
+}
+
+/// An open tab, remembered between launches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedTab {
+    pub path: PathBuf,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub preview: bool,
+}
+
+/// Everything Dotnote remembers between launches.
+///
+/// `#[serde(default)]` means a missing field (e.g. from an older version)
+/// gets its default value instead of failing to load.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    pub last_vault: Option<PathBuf>,
+    pub view_mode: ViewMode,
+    pub sidebar_width: Option<f32>,
+    pub sidebar_visible: bool,
+    /// The tabs open in `last_vault`, in order, and which one was active.
+    pub open_tabs: Vec<SavedTab>,
+    pub active_tab: Option<usize>,
+    /// Vaults with git sync turned on (the remote itself is in each vault's `.git`).
+    pub synced_vaults: Vec<PathBuf>,
+    /// Look for a new Dotnote release on GitHub at launch.
+    pub check_for_updates: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            last_vault: None,
+            view_mode: ViewMode::default(),
+            sidebar_width: None,
+            sidebar_visible: true,
+            open_tabs: Vec::new(),
+            active_tab: None,
+            synced_vaults: Vec::new(),
+            check_for_updates: true,
+        }
+    }
+}
+
+impl Settings {
+    /// Where settings are stored: `$DOTNOTE_CONFIG_DIR/settings.json` if that
+    /// variable is set (handy for a separate dev/test instance), otherwise the OS
+    /// config folder. `None` if neither exists.
+    pub fn default_path() -> Option<PathBuf> {
+        let dir = match std::env::var_os("DOTNOTE_CONFIG_DIR") {
+            Some(dir) if !dir.is_empty() => PathBuf::from(dir),
+            _ => dirs::config_dir()?.join("dotnote"),
+        };
+        Some(dir.join("settings.json"))
+    }
+
+    /// Where the app kept settings when it was called KuNotes. Read once, when
+    /// `default_path` has no file yet, so saved vaults survive the rename.
+    pub fn old_default_path() -> Option<PathBuf> {
+        if std::env::var_os("DOTNOTE_CONFIG_DIR").is_some_and(|dir| !dir.is_empty()) {
+            return None;
+        }
+        Some(dirs::config_dir()?.join("kunotes").join("settings.json"))
+    }
+
+    /// Loads settings from `path`. A missing or broken file gives the defaults,
+    /// so a bad settings file can never stop the app from starting.
+    pub fn load_from(path: &Path) -> Settings {
+        fs::read_to_string(path)
+            .ok()
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default()
+    }
+
+    /// Saves settings to `path`, creating the folder if needed.
+    pub fn save_to(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string_pretty(self)?;
+        atomic_write(path, json.as_bytes())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_show_sidebar_in_live_mode() {
+        let settings = Settings::default();
+        assert!(settings.sidebar_visible);
+        assert!(settings.check_for_updates);
+        assert_eq!(settings.view_mode, ViewMode::Live);
+        assert_eq!(settings.last_vault, None);
+    }
+
+    #[test]
+    fn missing_fields_use_defaults() {
+        let settings: Settings = serde_json::from_str(r#"{ "view_mode": "split" }"#).unwrap();
+        assert_eq!(settings.view_mode, ViewMode::Split);
+        assert!(settings.sidebar_visible);
+    }
+}

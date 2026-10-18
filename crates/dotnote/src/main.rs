@@ -1,0 +1,28 @@
+//! Dotnote entry point: sets up logging and starts the GPUI app.
+//! Everything else happens in `app.rs`.
+
+// Release builds on Windows are GUI apps: don't open a console window next to Dotnote.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod actions;
+mod app;
+mod assets;
+mod git_sync;
+mod platform;
+mod settings_store;
+mod ui;
+mod updater;
+mod vault_lock;
+mod vault_store;
+#[cfg(test)]
+mod vault_store_tests;
+mod watcher;
+
+fn main() {
+    // Default to warnings only; use RUST_LOG=dotnote=debug for more detail.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+
+    gpui_kit::application()
+        .with_assets(assets::AppAssets)
+        .run(app::run);
+}

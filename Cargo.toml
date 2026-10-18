@@ -1,16 +1,16 @@
 [workspace]
 resolver = "3"
-members = ["crates/kunotes-core", "crates/kunotes"]
+members = ["crates/dotnote-core", "crates/dotnote"]
 
 [workspace.package]
-version = "0.1.2"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.92"
 license = "Apache-2.0"
-repository = "https://github.com/sofyan-rs/kunotes-gpui"
+repository = "https://github.com/sofyan-rs/dotnote-gpui"
 
 [workspace.dependencies]
-kunotes-core = { path = "crates/kunotes-core" }
+dotnote-core = { path = "crates/dotnote-core" }
 gpui-kit = { version = "0.7.1", features = ["tree-sitter-markdown", "tree-sitter-markdown-inline"] }
 anyhow = "1"
 log = "0.4"

@@ -1,3 +1,3 @@
 # Welcome
 
-Open this folder as a vault in KuNotes.
+Open this folder as a vault in Dotnote.

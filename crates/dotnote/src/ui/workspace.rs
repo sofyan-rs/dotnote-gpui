@@ -13,8 +13,8 @@ use crate::actions::{
     About, ChangeNotesPassword, CheckForUpdates, CloseAllTabs, CloseOtherTabs, CloseSavedTabs,
     CloseTab, CloseTabsToTheRight, CloseVault, CollapseFolders, CycleViewMode, DeleteSelection,
     LockNotes, NewFile, NewFolder, NextTab, OpenVault, PreviousTab, QuickSwitcher, RenameSelection,
-    ToggleNoteLock, TogglePinTab, ToggleSidebar, ViewLive, ViewPreview, ViewSource, ViewSplit,
-    WORKSPACE,
+    SetFolderLock, ToggleNoteLock, TogglePinTab, ToggleSidebar, ViewLive, ViewPreview, ViewSource,
+    ViewSplit, WORKSPACE,
 };
 use crate::git_sync::{GitSync, GitSyncEvent};
 use crate::settings_store::SettingsStore;
@@ -338,6 +338,23 @@ impl Workspace {
         );
     }
 
+    fn set_folder_lock(
+        &mut self,
+        action: &SetFolderLock,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        note_lock::set_folder_lock(
+            action.path.clone(),
+            action.lock,
+            self.vault.clone(),
+            self.vault_lock.clone(),
+            self.editor_area.clone(),
+            window,
+            cx,
+        );
+    }
+
     fn about(&mut self, _: &About, window: &mut Window, cx: &mut Context<Self>) {
         dialogs::about(window, cx);
     }
@@ -405,6 +422,7 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::change_notes_password))
             .on_action(cx.listener(Self::collapse_folders))
             .on_action(cx.listener(Self::toggle_note_lock))
+            .on_action(cx.listener(Self::set_folder_lock))
             .on_action(cx.listener(Self::about))
             .on_action(cx.listener(Self::check_for_updates))
             .on_action(cx.listener(Self::close_vault))

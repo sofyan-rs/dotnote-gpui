@@ -93,3 +93,60 @@ fn old_kunotes_key_file_is_renamed() {
         "key"
     );
 }
+
+#[test]
+fn a_folder_locks_and_unlocks_with_its_subfolders() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let folder = root.join("Secrets");
+    let sub = folder.join("日本 🔑");
+    fs::create_dir_all(&sub).unwrap();
+    fs::create_dir_all(folder.join(".hidden")).unwrap();
+    fs::write(folder.join("A.md"), "a").unwrap();
+    fs::write(sub.join("B.md"), "b 🔑").unwrap();
+    fs::write(folder.join("photo.png"), "png").unwrap();
+    fs::write(folder.join(".hidden").join("H.md"), "h").unwrap();
+    fs::write(root.join("Outside.md"), "o").unwrap();
+    let key = lock::create_password(root, "correct horse").unwrap();
+    // Already locked, and a name whose locked form is taken: skipped / failed.
+    lock::lock_note(&key, &folder.join("A.md")).unwrap();
+    fs::remove_file(folder.join("A.md")).unwrap(); // (the app trashes it)
+    fs::write(folder.join("C.md"), "c").unwrap();
+    fs::write(folder.join("C.md.age"), "taken").unwrap();
+
+    let change = lock::convert_folder(&key, &folder, true);
+    let converted: Vec<_> = change
+        .converted
+        .iter()
+        .map(|(_, new)| new.clone())
+        .collect();
+    assert_eq!(converted, vec![sub.join("B.md.age")]);
+    assert_eq!(change.failed.len(), 1, "C.md.age already exists");
+    assert_eq!(change.failed[0].0, folder.join("C.md"));
+    assert!(sub.join("B.md").exists(), "the app trashes the plain copy");
+    assert_eq!(
+        lock::read_note(&key, &sub.join("B.md.age")).unwrap(),
+        "b 🔑"
+    );
+    assert!(
+        !root.join("Outside.md.age").exists(),
+        "only inside the folder"
+    );
+    assert!(
+        !folder.join(".hidden").join("H.md.age").exists(),
+        "hidden skipped"
+    );
+
+    fs::remove_file(sub.join("B.md")).unwrap();
+    fs::remove_file(folder.join("C.md.age")).unwrap();
+    let change = lock::convert_folder(&key, &folder, false);
+    let mut converted: Vec<_> = change
+        .converted
+        .iter()
+        .map(|(_, new)| new.clone())
+        .collect();
+    converted.sort();
+    assert_eq!(converted, vec![folder.join("A.md"), sub.join("B.md")]);
+    assert!(change.failed.is_empty());
+    assert_eq!(fs::read_to_string(sub.join("B.md")).unwrap(), "b 🔑");
+}

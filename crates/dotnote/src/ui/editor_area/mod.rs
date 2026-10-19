@@ -119,9 +119,7 @@ impl EditorArea {
         let vault = self.vault.read(cx);
         let root = vault.root().map(Path::to_path_buf);
         let selected = vault.selected_file().map(Path::to_path_buf);
-        let moved = vault
-            .last_move()
-            .map(|(old, new)| (old.to_path_buf(), new.to_path_buf()));
+        let moved = vault.last_moves().to_vec();
 
         if root != self.root {
             self.switch_vault(root, window, cx);
@@ -129,7 +127,7 @@ impl EditorArea {
         }
 
         // A renamed or moved note keeps its tab and editor (and unsaved typing).
-        if let Some((old, new)) = moved {
+        for (old, new) in moved {
             for (from, to) in self.tabs.remap(&old, &new) {
                 if let Some(pane) = self.panes.remove(&from) {
                     pane.update(cx, |pane, cx| pane.set_path(to.clone(), cx));

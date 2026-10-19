@@ -19,6 +19,8 @@ use age::x25519;
 
 use crate::error::{CoreError, Result};
 use crate::fs_ops::atomic_write;
+use crate::node::VaultNode;
+use crate::search::flatten_files;
 
 /// The encrypted vault key, at the vault root (hidden, but synced with git).
 pub const KEY_FILE: &str = ".dotnote-lock.age";
@@ -198,6 +200,40 @@ pub fn unlock_note(key: &VaultKey, locked: &Path) -> Result<PathBuf> {
     let text = read_note(key, locked)?;
     atomic_write(&note, text.as_bytes())?;
     Ok(note)
+}
+
+/// What locking (or unlocking) every note in a folder did.
+#[derive(Debug, Default)]
+pub struct FolderChange {
+    /// `(old path, new path)` of each converted note. The caller then moves
+    /// the old files to the trash.
+    pub converted: Vec<(PathBuf, PathBuf)>,
+    /// Notes left as they were, with the reason.
+    pub failed: Vec<(PathBuf, CoreError)>,
+}
+
+/// Locks (`locking`) or removes the lock of every note in `folder` and its
+/// subfolders. Notes already in the wanted form are skipped; hidden and
+/// symlinked folders are skipped like in the tree. One failing note doesn't
+/// stop the others.
+pub fn convert_folder(key: &VaultKey, folder: &Path, locking: bool) -> FolderChange {
+    let tree = VaultNode::scan(folder);
+    let mut change = FolderChange::default();
+    for note in flatten_files(&tree) {
+        if is_locked_note(&note.path) == locking {
+            continue;
+        }
+        let result = if locking {
+            lock_note(key, &note.path)
+        } else {
+            unlock_note(key, &note.path)
+        };
+        match result {
+            Ok(new_path) => change.converted.push((note.path.clone(), new_path)),
+            Err(error) => change.failed.push((note.path.clone(), error)),
+        }
+    }
+    change
 }
 
 #[cfg(test)]

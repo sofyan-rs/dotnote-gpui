@@ -478,9 +478,10 @@ For notes holding credentials: the note is **encrypted on disk**, so it's unread
 - **`VaultLock`** (owned by `Workspace`) holds the key in memory only while unlocked. It forgets it after 5 minutes without using a locked note (typing touches it), on `secondary-shift-l` / *Lock Notes Now* / the header's lock button, when another vault opens, and when the app quits.
 - **In the editor** (`Secret`: `No` / `Hidden` / `Shown`): a locked note opens hidden (lock screen with *Unlock…*) or, if unlocked, decrypted. Saving a shown note encrypts it (`lock::write_note` → `atomic_write`); a hidden one never saves. When the vault locks, a shown note saves with its own copy of the key, then its editors and preview are **rebuilt empty**, dropping the text and its undo history.
 - **Lock / Remove Lock** (tree menu, `ToggleNoteLock`): asks for the password if needed, saves open notes, writes the other form (`lock_note` checks the encrypted copy opens before anything else happens), then `VaultStore::replace_note` moves the tab to the new path and the old file to the OS trash. The notification reminds that the old plain copy is in the trash and older versions may remain in git history.
+- **Lock All Notes / Remove All Locks** (folder menu, `SetFolderLock`): the same for every note in the folder and its subfolders (hidden and symlinked folders skipped, like the tree). Asks for the password if needed, saves open notes, then `lock::convert_folder` runs in the background; notes already in the wanted form are skipped, and one failing note (e.g. `Name.md.age` already exists) doesn't stop the others. `VaultStore::replace_notes` moves every open tab (`last_moves` holds all of them) and trashes the old files; one notification sums up how many changed and the first failure. A folder isn't a lock of its own: new notes in it start unlocked.
 - **Change Notes Password…** (File menu, `ChangeNotesPassword`): current password + new one twice. `lock::change_password` unlocks the vault key with the current password and rewrites only `.dotnote-lock.age` with the new one (`atomic_write`); the key stays the same, so locked notes aren't touched, and with git sync other computers pick up the new key file on their next sync. Afterwards notes are unlocked. Without a vault password yet, a notification says to lock a note first.
 - Limits: plaintext is in memory while shown (not zeroized); file names aren't encrypted.
-- Tests: `dotnote-core/tests/lock.rs` (password, round trip, wrong password, other vault's key), `ui/note_lock_tests.rs` (lock an open note, encrypted autosave, lock hides the text, unlock restores it).
+- Tests: `dotnote-core/tests/lock.rs` (password, round trip, wrong password, other vault's key, folder lock/unlock), `ui/note_lock_tests.rs` (lock an open note, encrypted autosave, lock hides the text, unlock restores it, folder lock moves open tabs).
 
 
 ### 6.13 App updates (`dotnote-core/src/update.rs`, `updater.rs`, `ui/update_dialog.rs`)
@@ -518,7 +519,7 @@ The write itself runs on the UI thread, on purpose. Notes are small, so it takes
 
 When to save immediately (`save_now`):
 - another note gets selected. The workspace saves the old pane first, unless its file no longer exists: a deleted note must not be written back.
-- the open note is renamed or moved. The pane isn't recreated; `VaultStore::last_move` lets the workspace call `set_path`, so unsaved typing follows the note.
+- the open note is renamed or moved. The pane isn't recreated; `VaultStore::last_moves` lets the workspace call `set_path`, so unsaved typing follows the note.
 - `cx.on_app_quit`, and when the window closes (the app quits when its only window closes).
 - `secondary-s`, as an explicit "save now".
 
@@ -614,7 +615,7 @@ A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa
 | Tabs | Several notes open; preview tabs; pin, close variants, drag to reorder, copy path, reveal; restored on launch | §6.10 |
 | Live sync | Changes made outside the app appear in the tree | §7.2 |
 | Git sync | Optional: sync the vault with the user's git remote (auto + manual), conflicts kept as copies | §6.11 |
-| Locked notes | Encrypt notes with credentials (age, one vault password), auto-lock after 5 min | §6.12 |
+| Locked notes | Encrypt notes with credentials (age, one vault password), one note or a whole folder, auto-lock after 5 min | §6.12 |
 | Updates | Check GitHub Releases at launch and on demand; download, verify (SHA-256), install, restart | §6.13 |
 | Layout | Resizable, toggleable sidebar; view mode and sidebar width remembered | §5, §4.3 |
 

@@ -8,7 +8,7 @@ use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::{App, ClipboardItem, Context, Entity, Window};
 
 use super::file_tree::FileTree;
-use crate::actions::ToggleNoteLock;
+use crate::actions::{SetFolderLock, ToggleNoteLock};
 use crate::platform;
 use crate::ui::dialogs;
 use crate::vault_store::VaultStore;
@@ -46,6 +46,20 @@ pub fn build(
                 }),
             )
             .separator();
+        // Lock (encrypt) every note in the folder, or remove their locks.
+        for (label, lock) in [("Lock All Notes", true), ("Remove All Locks", false)] {
+            let (t, p) = (tree.clone(), path.clone());
+            menu = menu.item(PopupMenuItem::new(label).on_click(move |_, window, cx| {
+                let action = SetFolderLock {
+                    path: p.clone(),
+                    lock,
+                };
+                after_menu_closes(&t, window, cx, move |_, window, cx| {
+                    window.dispatch_action(Box::new(action), cx);
+                });
+            }));
+        }
+        menu = menu.separator();
     }
 
     if !is_dir {

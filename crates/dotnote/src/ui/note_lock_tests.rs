@@ -9,7 +9,7 @@ use dotnote_core::lock;
 use gpui_kit::test::TestWindowExt as _;
 use gpui_kit::{AppContext as _, Entity, TestAppContext};
 
-use crate::actions::ToggleNoteLock;
+use crate::actions::{SetFolderLock, ToggleNoteLock};
 use crate::ui::editor::EditorPane;
 use crate::ui::test_helpers::{Setup, in_window, setup};
 use crate::vault_lock::VaultLock;
@@ -149,4 +149,50 @@ fn the_password_dialog_changes_the_vault_password(cx: &mut TestAppContext) {
     assert!(vault_lock(&s, cx).read_with(cx, |lock, _| lock.is_unlocked()));
     assert!(lock::unlock(s.dir.path(), "password one").is_err());
     assert!(lock::unlock(s.dir.path(), "password two").is_ok());
+}
+
+#[gpui_kit::test]
+fn a_folder_locks_all_its_notes_and_open_tabs_follow(cx: &mut TestAppContext) {
+    let s = setup(cx);
+    let plan = s.path("Projects/Plan.md");
+    s.vault
+        .update(cx, |vault, cx| vault.select(plan.clone(), false, cx));
+    cx.run_until_parked();
+    unlock(&s, cx, "password one");
+
+    let folder = s.path("Projects");
+    in_window(&s, cx, |window, cx| {
+        window.dispatch_action(
+            Box::new(SetFolderLock {
+                path: folder.clone(),
+                lock: true,
+            }),
+            cx,
+        )
+    });
+    cx.run_until_parked();
+
+    let locked = [
+        s.path("Projects/Plan.md.age"),
+        s.path("Projects/Archive/old.md.age"),
+    ];
+    assert!(locked.iter().all(|path| path.exists()));
+    assert!(!plan.exists() && !s.path("Projects/Archive/old.md").exists());
+    assert!(s.path("Welcome.md").exists(), "outside the folder");
+    let tab_path = pane(&s, cx).read_with(cx, |pane, _| pane.path().to_path_buf());
+    assert_eq!(tab_path, locked[0], "the open tab follows the locked file");
+
+    in_window(&s, cx, |window, cx| {
+        window.dispatch_action(
+            Box::new(SetFolderLock {
+                path: folder.clone(),
+                lock: false,
+            }),
+            cx,
+        )
+    });
+    cx.run_until_parked();
+    assert!(plan.exists() && !locked[0].exists() && !locked[1].exists());
+    let tab_path = pane(&s, cx).read_with(cx, |pane, _| pane.path().to_path_buf());
+    assert_eq!(tab_path, plan);
 }

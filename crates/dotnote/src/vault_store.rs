@@ -37,9 +37,10 @@ pub struct VaultStore {
     selected_path: Option<PathBuf>,
     /// Folders the user expanded in the tree. Kept across rescans.
     expanded: HashSet<PathBuf>,
-    /// The most recent rename/move (`old`, `new`). The editor uses it to follow
-    /// the open note to its new path instead of losing unsaved typing.
-    last_move: Option<(PathBuf, PathBuf)>,
+    /// The most recent rename/move (`old`, `new`), or several when a whole
+    /// folder was locked. The editor uses them to follow open notes to their
+    /// new paths instead of losing unsaved typing.
+    last_moves: Vec<(PathBuf, PathBuf)>,
     /// Increased on every scan so a slow, outdated scan can't overwrite a newer one.
     scan_generation: u64,
     scan_task: Option<Task<()>>,
@@ -70,10 +71,8 @@ impl VaultStore {
         self.selected_file.as_deref()
     }
 
-    pub fn last_move(&self) -> Option<(&Path, &Path)> {
-        self.last_move
-            .as_ref()
-            .map(|(old, new)| (old.as_path(), new.as_path()))
+    pub fn last_moves(&self) -> &[(PathBuf, PathBuf)] {
+        &self.last_moves
     }
 
     pub fn selected_path(&self) -> Option<&Path> {
@@ -325,6 +324,7 @@ impl VaultStore {
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         let new_path = fs_ops::rename(path, new_name).map_err(|error| error.to_string())?;
+        self.last_moves.clear();
         self.remap(path, &new_path);
         self.refresh(cx);
         cx.notify();
@@ -335,6 +335,7 @@ impl VaultStore {
     pub fn move_into(&mut self, path: &Path, folder: &Path, cx: &mut Context<Self>) {
         match fs_ops::move_into(path, folder) {
             Ok(new_path) => {
+                self.last_moves.clear();
                 self.remap(path, &new_path);
                 self.expanded.insert(folder.to_path_buf());
                 self.refresh(cx);
@@ -347,12 +348,20 @@ impl VaultStore {
     /// `new` replaces `old` (a note was locked or unlocked): its tab and
     /// selection follow, then `old` goes to the OS trash.
     pub fn replace_note(&mut self, old: &Path, new: &Path, cx: &mut Context<Self>) {
-        self.remap(old, new);
-        if let Err(error) = trash_file(old) {
-            cx.emit(VaultEvent::Error(format!(
-                "The note was saved as “{}”, but the old copy couldn't be moved to the trash: {error}",
-                new.file_name().unwrap_or_default().to_string_lossy()
-            )));
+        self.replace_notes(&[(old.to_path_buf(), new.to_path_buf())], cx);
+    }
+
+    /// `replace_note` for many notes at once (a folder was locked or unlocked).
+    pub fn replace_notes(&mut self, notes: &[(PathBuf, PathBuf)], cx: &mut Context<Self>) {
+        self.last_moves.clear();
+        for (old, new) in notes {
+            self.remap(old, new);
+            if let Err(error) = trash_file(old) {
+                cx.emit(VaultEvent::Error(format!(
+                    "The note was saved as “{}”, but the old copy couldn't be moved to the trash: {error}",
+                    new.file_name().unwrap_or_default().to_string_lossy()
+                )));
+            }
         }
         self.refresh(cx);
         cx.notify();
@@ -378,8 +387,9 @@ impl VaultStore {
     }
 
     /// After `old` became `new`, points the selection and expanded folders at the new paths.
+    /// Callers clear `last_moves` first, so it holds only this change's moves.
     fn remap(&mut self, old: &Path, new: &Path) {
-        self.last_move = Some((old.to_path_buf(), new.to_path_buf()));
+        self.last_moves.push((old.to_path_buf(), new.to_path_buf()));
         let update = |slot: &mut Option<PathBuf>| {
             if let Some(path) = slot.as_deref()
                 && let Some(moved) = remap_path(path, old, new)

@@ -40,6 +40,15 @@ pub struct ToggleNoteLock {
     pub path: std::path::PathBuf,
 }
 
+/// Locks every note in a folder (`lock: true`) or removes their locks.
+/// Sent by the file tree's menu.
+#[derive(Clone, PartialEq, Debug, gpui_kit::Action)]
+#[action(namespace = dotnote, no_json)]
+pub struct SetFolderLock {
+    pub path: std::path::PathBuf,
+    pub lock: bool,
+}
+
 // Tabs. Handled by the workspace, so they work wherever the focus is.
 actions!(
     tabs,

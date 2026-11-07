@@ -61,14 +61,25 @@ pub fn render(
                     // `occlude` hides the title bar's drag region under the button. Without it,
                     // Windows treats the click as a window drag (HTCAPTION) and the button never
                     // sees it. The in-window menu bar does the same.
-                    h_flex().items_center().occlude().child(
-                        Button::new("toggle-sidebar")
-                            .ghost()
-                            .small()
-                            .icon(IconName::PanelLeft)
-                            .tooltip_with_action("Toggle Sidebar", &ToggleSidebar, Some(WORKSPACE))
-                            .on_click(on_toggle),
-                    ),
+                    // Both buttons are 24px tall and centered, but menu text sits low in its
+                    // line box. Nudge the icon down 1px so it lines up with the menu labels.
+                    h_flex()
+                        .items_center()
+                        .occlude()
+                        .relative()
+                        .top(gpui_kit::px(1.0))
+                        .child(
+                            Button::new("toggle-sidebar")
+                                .ghost()
+                                .small()
+                                .icon(IconName::PanelLeft)
+                                .tooltip_with_action(
+                                    "Toggle Sidebar",
+                                    &ToggleSidebar,
+                                    Some(WORKSPACE),
+                                )
+                                .on_click(on_toggle),
+                        ),
                 )
                 .children(menu_bar),
         )

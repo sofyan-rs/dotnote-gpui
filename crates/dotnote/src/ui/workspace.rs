@@ -3,8 +3,8 @@
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::component::{ActiveTheme as _, Theme, WindowExt as _, v_flex};
 use gpui_kit::{
-    AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
-    ParentElement as _, PathPromptOptions, Render, Styled as _, Subscription, Window, px,
+    App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
+    ParentElement as _, PathPromptOptions, Render, Styled as _, Subscription, Window, px, rgb,
 };
 
 use dotnote_core::settings::ViewMode;
@@ -122,11 +122,9 @@ impl Workspace {
                 }
             }),
             // Follow the system light/dark setting while the app is running.
-            cx.observe_window_appearance(window, |_, window, cx| {
-                Theme::sync_system_appearance(Some(window), cx);
-            }),
+            cx.observe_window_appearance(window, |_, window, cx| sync_theme(window, cx)),
         ];
-        Theme::sync_system_appearance(Some(window), cx);
+        sync_theme(window, cx);
 
         // Focus the workspace so its keyboard shortcuts work right away.
         let focus_handle = cx.focus_handle();
@@ -493,5 +491,21 @@ impl Render for Workspace {
                     )
                     .child(resizable_panel().child(self.editor_area.clone())),
             )
+    }
+}
+
+/// Follows the system light/dark setting.
+///
+/// The dark theme's `danger` colors are a pale red with red text, and the
+/// title bar's close button uses them on hover. Use the light theme's solid
+/// red with white text instead, so hovering close looks like a normal window.
+fn sync_theme(window: &mut Window, cx: &mut App) {
+    Theme::sync_system_appearance(Some(window), cx);
+    if cx.theme().is_dark() {
+        Theme::update(cx, |theme| {
+            theme.danger = rgb(0xef4444).into(); // red-500
+            theme.danger_active = rgb(0xdc2626).into(); // red-600
+            theme.danger_foreground = rgb(0xfafafa).into(); // neutral-50
+        });
     }
 }

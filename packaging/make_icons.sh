@@ -19,10 +19,12 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o packaging/macos/Dotnote.icns
 
-# Windows: multi-size .ico.
+# Windows: multi-size .ico. Windows icons fill the whole canvas, so crop away the
+# macOS-style padding first (the rounded square spans 824 of the 1024 px, centered).
+sips -c 824 824 "$MASTER" --out "$WORK/win_master.png" >/dev/null
 ICO_PNGS=()
 for size in 16 24 32 48 64 128 256; do
-  resize "$size" "$WORK/ico_$size.png"
+  sips -z "$size" "$size" "$WORK/win_master.png" --out "$WORK/ico_$size.png" >/dev/null
   ICO_PNGS+=("$WORK/ico_$size.png")
 done
 python3 packaging/make_ico.py packaging/windows/dotnote.ico "${ICO_PNGS[@]}"

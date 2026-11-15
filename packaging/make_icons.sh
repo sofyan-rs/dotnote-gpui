@@ -30,10 +30,13 @@ done
 python3 packaging/make_ico.py packaging/windows/dotnote.ico "${ICO_PNGS[@]}"
 
 # Linux (Fedora): freedesktop hicolor theme layout, used by the .desktop file and .rpm.
+# GNOME icons fill more of the canvas than macOS ones (the square spans ~88%), so trim
+# part of the padding (940 px keeps the drop shadow) to match the other dock icons.
+sips -c 940 940 "$MASTER" --out "$WORK/linux_master.png" >/dev/null
 for size in 16 32 48 64 128 256 512; do
   dir="packaging/linux/icons/hicolor/${size}x${size}/apps"
   mkdir -p "$dir"
-  resize "$size" "$dir/dotnote.png"
+  sips -z "$size" "$size" "$WORK/linux_master.png" --out "$dir/dotnote.png" >/dev/null
 done
 
 echo "Icons regenerated from $MASTER"

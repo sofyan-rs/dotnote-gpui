@@ -5,6 +5,7 @@ use gpui_kit::{App, AppContext, Bounds, WindowBounds, WindowOptions, px, size};
 
 use crate::actions::{self, Quit};
 use crate::settings_store::SettingsStore;
+use crate::ui::title_bar;
 use crate::ui::workspace::Workspace;
 
 /// Identifies the app to the OS. On Linux (Wayland) it must match the `.desktop`
@@ -46,12 +47,15 @@ pub fn run(cx: &mut App) {
 }
 
 /// Native menu bar on macOS; the in-window menu bar (Windows, Linux) reads the same list.
-fn install_menus(cx: &mut App) {
+/// Called again when a setting shown in the menus (the appearance check mark) changes.
+pub fn install_menus(cx: &mut App) {
+    let appearance = SettingsStore::get(cx).appearance;
     // `Menu` can't be cloned, so build the list once for each consumer.
-    let owned_menus = actions::app_menus()
+    let owned_menus = actions::app_menus(appearance)
         .into_iter()
         .map(|menu| menu.owned())
         .collect();
     GlobalState::global_mut(cx).set_app_menus(owned_menus);
-    cx.set_menus(actions::app_menus());
+    cx.set_menus(actions::app_menus(appearance));
+    title_bar::reload_menu_bar(cx);
 }

@@ -1,20 +1,20 @@
 //! The root view of the main window: title bar on top, sidebar and editor area below.
 
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
-use gpui_kit::component::{ActiveTheme as _, Theme, WindowExt as _, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode, WindowExt as _, v_flex};
 use gpui_kit::{
     App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
     ParentElement as _, PathPromptOptions, Render, Styled as _, Subscription, Window, px, rgb,
 };
 
-use dotnote_core::settings::ViewMode;
+use dotnote_core::settings::{Appearance, ViewMode};
 
 use crate::actions::{
-    About, ChangeNotesPassword, CheckForUpdates, CloseAllTabs, CloseOtherTabs, CloseSavedTabs,
-    CloseTab, CloseTabsToTheRight, CloseVault, CollapseFolders, CycleViewMode, DeleteSelection,
-    LockNotes, NewFile, NewFolder, NextTab, OpenVault, PreviousTab, QuickSwitcher, RenameSelection,
-    SetFolderLock, ToggleNoteLock, TogglePinTab, ToggleSidebar, ViewLive, ViewPreview, ViewSource,
-    ViewSplit, WORKSPACE,
+    About, AppearanceDark, AppearanceLight, AppearanceSystem, ChangeNotesPassword, CheckForUpdates,
+    CloseAllTabs, CloseOtherTabs, CloseSavedTabs, CloseTab, CloseTabsToTheRight, CloseVault,
+    CollapseFolders, CycleViewMode, DeleteSelection, LockNotes, NewFile, NewFolder, NextTab,
+    OpenVault, PreviousTab, QuickSwitcher, RenameSelection, SetFolderLock, ToggleNoteLock,
+    TogglePinTab, ToggleSidebar, ViewLive, ViewPreview, ViewSource, ViewSplit, WORKSPACE,
 };
 use crate::git_sync::{GitSync, GitSyncEvent};
 use crate::settings_store::SettingsStore;
@@ -121,7 +121,8 @@ impl Workspace {
                     window.push_notification(message.clone(), cx);
                 }
             }),
-            // Follow the system light/dark setting while the app is running.
+            // Follow the system light/dark setting while the app is running
+            // (`sync_theme` ignores it when the user picked Light or Dark).
             cx.observe_window_appearance(window, |_, window, cx| sync_theme(window, cx)),
         ];
         sync_theme(window, cx);
@@ -434,6 +435,15 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::view_split))
             .on_action(cx.listener(Self::view_preview))
             .on_action(cx.listener(Self::cycle_view_mode))
+            .on_action(cx.listener(|_, _: &AppearanceSystem, window, cx| {
+                set_appearance(Appearance::System, window, cx)
+            }))
+            .on_action(cx.listener(|_, _: &AppearanceLight, window, cx| {
+                set_appearance(Appearance::Light, window, cx)
+            }))
+            .on_action(cx.listener(|_, _: &AppearanceDark, window, cx| {
+                set_appearance(Appearance::Dark, window, cx)
+            }))
             .on_action(cx.listener(Self::quick_switcher))
             // Tab commands go to the editor area, wherever the focus is.
             .on_action(
@@ -494,13 +504,24 @@ impl Render for Workspace {
     }
 }
 
-/// Follows the system light/dark setting.
+/// Saves the user's Appearance choice, recolors the window, and moves the menu check mark.
+fn set_appearance(appearance: Appearance, window: &mut Window, cx: &mut App) {
+    SettingsStore::update(cx, |settings| settings.appearance = appearance);
+    sync_theme(window, cx);
+    crate::app::install_menus(cx);
+}
+
+/// Applies the Appearance setting: the system light/dark setting, or a fixed one.
 ///
 /// The dark theme's `danger` colors are a pale red with red text, and the
 /// title bar's close button uses them on hover. Use the light theme's solid
 /// red with white text instead, so hovering close looks like a normal window.
 fn sync_theme(window: &mut Window, cx: &mut App) {
-    Theme::sync_system_appearance(Some(window), cx);
+    match SettingsStore::get(cx).appearance {
+        Appearance::System => Theme::sync_system_appearance(Some(window), cx),
+        Appearance::Light => Theme::change(ThemeMode::Light, Some(window), cx),
+        Appearance::Dark => Theme::change(ThemeMode::Dark, Some(window), cx),
+    }
     if cx.theme().is_dark() {
         Theme::update(cx, |theme| {
             theme.danger = rgb(0xef4444).into(); // red-500

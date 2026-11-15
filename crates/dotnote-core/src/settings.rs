@@ -24,6 +24,17 @@ pub enum ViewMode {
     Preview,
 }
 
+/// Light or dark colors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    /// Follow the system light/dark setting.
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 /// An open tab, remembered between launches.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedTab {
@@ -52,6 +63,8 @@ pub struct Settings {
     pub synced_vaults: Vec<PathBuf>,
     /// Look for a new Dotnote release on GitHub at launch.
     pub check_for_updates: bool,
+    /// Light, dark, or follow the system.
+    pub appearance: Appearance,
 }
 
 impl Default for Settings {
@@ -65,6 +78,7 @@ impl Default for Settings {
             active_tab: None,
             synced_vaults: Vec::new(),
             check_for_updates: true,
+            appearance: Appearance::System,
         }
     }
 }
@@ -120,6 +134,15 @@ mod tests {
         assert!(settings.check_for_updates);
         assert_eq!(settings.view_mode, ViewMode::Live);
         assert_eq!(settings.last_vault, None);
+        assert_eq!(settings.appearance, Appearance::System);
+    }
+
+    #[test]
+    fn appearance_round_trips_as_lowercase() {
+        let settings: Settings = serde_json::from_str(r#"{ "appearance": "dark" }"#).unwrap();
+        assert_eq!(settings.appearance, Appearance::Dark);
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(json.contains(r#""appearance":"dark""#));
     }
 
     #[test]

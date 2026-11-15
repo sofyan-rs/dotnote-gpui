@@ -55,6 +55,9 @@ pub struct GitSync {
     root: Option<PathBuf>,
     /// The remote's address, while sync is on.
     remote: Option<String>,
+    /// While sync is off: the remote of a vault that is already a git repository
+    /// (e.g. cloned), offered in the setup dialog so it needn't be typed again.
+    existing_remote: Option<String>,
     status: SyncStatus,
     /// The sync running now; `None` when idle.
     running: Option<Task<()>>,
@@ -86,6 +89,7 @@ impl GitSync {
             editor_area,
             root: None,
             remote: None,
+            existing_remote: None,
             status: SyncStatus::Off,
             running: None,
             again: false,
@@ -104,6 +108,11 @@ impl GitSync {
     /// The remote's address, while sync is on.
     pub fn remote(&self) -> Option<&str> {
         self.remote.as_deref()
+    }
+
+    /// The remote the vault's own `.git` already has, while sync is off.
+    pub fn existing_remote(&self) -> Option<&str> {
+        self.existing_remote.as_deref()
     }
 
     /// Starts syncing the open vault with `url`.
@@ -233,11 +242,13 @@ impl GitSync {
             return;
         }
         self.root = root.clone();
+        self.existing_remote = None;
         self.turn_off(cx);
         let Some(root) = root else {
             return;
         };
         if !SettingsStore::get(cx).synced_vaults.contains(&root) {
+            self.look_for_existing_remote(root, cx);
             return;
         }
         // Read the remote's address in the background, then sync.
@@ -260,6 +271,23 @@ impl GitSync {
                     None => sync.status = SyncStatus::Failed("The vault has no git remote.".into()),
                 }
                 cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Sync is off: find out (in the background) whether the vault already has a remote.
+    fn look_for_existing_remote(&mut self, root: PathBuf, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let lookup_root = root.clone();
+            let remote = cx
+                .background_spawn(async move { git::existing_remote(&lookup_root) })
+                .await;
+            let _ = this.update(cx, |sync, cx| {
+                if sync.root.as_ref() == Some(&root) {
+                    sync.existing_remote = remote;
+                    cx.notify();
+                }
             });
         })
         .detach();

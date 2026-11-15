@@ -48,6 +48,17 @@ pub fn remote_url(root: &Path) -> Option<String> {
     (!url.is_empty()).then_some(url)
 }
 
+/// The `origin` remote of a vault that is already a git repository of its own
+/// (e.g. one made with `git clone`), so sync can be turned on without typing it.
+/// `None` when the vault has no `.git`: git would otherwise report the remote
+/// of a repository in a parent folder.
+pub fn existing_remote(root: &Path) -> Option<String> {
+    if !root.join(".git").exists() {
+        return None;
+    }
+    remote_url(root)
+}
+
 /// Starts syncing `root` with `url`: makes the vault a git repository if it
 /// isn't one, sets the remote, and runs a first sync (which brings in the
 /// remote's notes and merges them with the ones already here).

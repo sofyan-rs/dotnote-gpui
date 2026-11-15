@@ -66,6 +66,7 @@ dotnote-gpui/
 │   │   │   ├── search.rs      # flatten files, quick-switcher filter, tree visible rows
 │   │   │   ├── fs_ops.rs      # create / rename / move / trash, atomic_write, unique names
 │   │   │   ├── git.rs         # git sync: connect, sync, conflict copies (runs `git`)
+│   │   │   ├── gtk_theme.rs   # Linux: window button ring colors from the GTK theme
 │   │   │   ├── lock.rs        # locked notes: vault password/key, encrypt, lock/unlock
 │   │   │   ├── names.rs       # filename validation (cross-platform rules)
 │   │   │   ├── paths.rs       # relative path, breadcrumb, note title, remap after rename
@@ -98,6 +99,7 @@ dotnote-gpui/
 │               ├── mod.rs
 │               ├── workspace.rs       # root view: title bar + sidebar + editor
 │               ├── title_bar.rs
+│               ├── window_buttons.rs  # Linux: GNOME-style title bar and window buttons
 │               ├── sidebar/
 │               │   ├── mod.rs         # Sidebar view: header buttons + tree
 │               │   ├── file_tree.rs   # FileTree (uniform_list rows, drag and drop)
@@ -255,6 +257,8 @@ pub struct Settings {
     pub view_mode: ViewMode,          // Live | Source | Split | Preview
     pub sidebar_width: Option<f32>,
     pub sidebar_visible: bool,
+    pub appearance: Appearance,       // System | Light | Dark
+    // … plus open tabs, synced vaults, update checks
 }
 ```
 
@@ -278,10 +282,11 @@ Settings are written atomically and saved on change (debounced). A missing or co
 └─────────────────────────────────────────────┴──────────────────────────┘
 ```
 
-- Window options: `TitleBar::window_options()` with `app_owns_titlebar_drag: true` on macOS. On Windows and Linux, `TitleBar` draws its own window controls.
+- Window options: `TitleBar::window_options()` with `app_owns_titlebar_drag: true` on macOS. On Windows, `TitleBar` draws its own window controls. On Linux with client-side decorations (GNOME on Wayland), Dotnote draws the whole title bar itself (`ui/window_buttons.rs`, `platform::draws_gnome_title_bar`): buttons follow GNOME's `button-layout` (`cx.button_layout()`, side and order), minus what `window.window_controls()` doesn't support. If the GTK theme draws ring buttons (adw-colors; `~/.config/gtk-4.0/gtk.css` and its imports, read once by `dotnote_core::gtk_theme`), they are those rings in its colors; otherwise libadwaita's round grey buttons. With server-side decorations the window manager draws its own.
 - Root: `gpui_kit::open_window(..)` wraps the workspace in `Root`, which hosts dialogs, sheets, and notifications.
 - Layout: `h_resizable("workspace")` → `resizable_panel().size(250).size_range(200..400).visible(sidebar_visible)` plus the detail element. Subscribe to `ResizablePanelEvent::Resized` to persist `sidebar_width`.
-- Theme: follows the system light/dark appearance. Accent color is blue.
+- Theme: **Dotnote → Theme** offers System (Default), Dark Mode, Light Mode (`Settings::appearance`). System follows the OS light/dark appearance while the app runs. The menus are rebuilt when it changes so the check mark moves (`app::install_menus`, which also reloads the in-window `AppMenuBar`). Accent color is blue.
+- Title bar: the title is centered on the full window width. On Windows/Linux its overlay is stretched under the window buttons (`platform::draws_window_controls`), since the title bar's own row ends where they begin.
 
 ---
 
@@ -463,8 +468,9 @@ Optional, per vault. The user enters a repository address (e.g. `https://github.
 - **Conflicts never lose text:** a file changed on both sides keeps this computer's version and saves the other as `Name (conflict YYYY-MM-DD).md` next to it (also for images); deleted-here/changed-there brings the file back; changed-here/deleted-there keeps it. The user gets a notification per copy.
 - **When** (`GitSync` entity, owned by `Workspace`): on opening the vault, 60 s after the last edit (`EditorAreaEvent::NoteEdited`), every 5 min, on click of the sidebar status, and on quit (commit + a push that gives up after 5 s). Only one sync runs at a time; a request during one runs right after. Open notes are saved (`EditorArea::save_all`) before every sync, and all git work runs on a background thread.
 - **After a pull**: the vault rescans, and open notes whose files changed reload (`EditorPane::reload_from_disk`) unless they have unsaved typing, which wins and is synced next time.
+- **Already a repository** (e.g. a `git clone`): while sync is off, `GitSync` looks up the vault's own `origin` (`git::existing_remote`, which requires `<vault>/.git` so a parent folder's repository never counts). The dialog fills it in and says so, so turning on is one click.
 - **Sidebar footer**: "Set Up Git Sync…" when off; otherwise "Synced N min ago" / "Syncing…" / "Sync failed · click to retry" (error in the tooltip) plus a gear for the dialog (change the address, Turn Off). Turning off removes the remote; the `.git` history stays.
-- Tests: `dotnote-core/tests/git.rs` syncs two vaults through a local bare repository (round trip, both-sides conflict, bad address, quit push).
+- Tests: `dotnote-core/tests/git.rs` syncs two vaults through a local bare repository (round trip, both-sides conflict, bad address, quit push, existing remote of a clone).
 
 ---
 
@@ -587,6 +593,7 @@ Rename and create reject, with a readable error:
 | Reveal | "Reveal in Finder" | "Show in Explorer" | "Open Containing Folder" |
 | Trash wording | "Move to Trash" | "Move to Recycle Bin" | "Move to Trash" |
 | App menu | native menu bar via `cx.set_menus` | menu in the title bar | menu in the title bar |
+| Window buttons | traffic lights | gpui-kit `TitleBar` controls | GNOME-style (`ui/window_buttons.rs`), or the window manager's |
 
 ### 8.5 Linux (Fedora) runtime requirements
 A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa or the vendor driver). The folder picker uses the XDG desktop portal. Fedora Workstation ships `xdg-desktop-portal-gnome`; the KDE spin ships `xdg-desktop-portal-kde`. Distribution is `.rpm`.
@@ -617,7 +624,7 @@ A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa
 | Git sync | Optional: sync the vault with the user's git remote (auto + manual), conflicts kept as copies | §6.11 |
 | Locked notes | Encrypt notes with credentials (age, one vault password), one note or a whole folder, auto-lock after 5 min | §6.12 |
 | Updates | Check GitHub Releases at launch and on demand; download, verify (SHA-256), install, restart | §6.13 |
-| Layout | Resizable, toggleable sidebar; view mode and sidebar width remembered | §5, §4.3 |
+| Layout | Resizable, toggleable sidebar; view mode and sidebar width remembered; theme System / Dark / Light | §5, §4.3 |
 
 ---
 
@@ -634,8 +641,10 @@ Answered from crate source.
 | 5 | Drag and drop | `on_drag` / `on_drop` / `drag_over` exist; `ListItem` supports them. Runtime check inside `uniform_list` pending. |
 | 6 | ToggleGroup | Multi-select; re-clicking unchecks. View mode derives the changed index and ignores un-checking the active mode. |
 | 7 | App menu Win/Linux | `AppMenuBar` component, fed via `GlobalState::set_app_menus`. |
-| 8 | Theme sync | `Theme::sync_system_appearance` + `cx.observe_window_appearance`. |
+| 8 | Theme sync | `Theme::sync_system_appearance` + `cx.observe_window_appearance`; a fixed choice uses `Theme::change(ThemeMode::Light/Dark, ..)`. |
 | 9 | Folder picker | `prompt_for_paths` returns a oneshot receiver; `Err` shows a notification. Fedora runtime check pending. |
 | 10 | Live stage A styling | Color, weight, italic per capture; no per-capture font size. Must use the unstyled `gpui_base::input::Editor` + `set_editor_style`, because the styled component forces the global highlight theme. |
 | 11 | Live stage B input | `EntityInputHandler` with **UTF-16** ranges; reference `gpui-pre/examples/input.rs`. IME runtime check on Windows/Fedora pending. |
 | 12 | Clickable title bar controls | `TitleBar` marks its row `WindowControlArea::Drag`. On Windows any hitbox stack containing it answers `HTCAPTION`, so the OS eats clicks. Wrap each clickable child in `div().occlude()` (as `AppMenuBar` does). |
+| 13 | Checked menu items | `MenuItem::action(..).checked(bool)` and `MenuItem::submenu(Menu)` work in the native menu and in `AppMenuBar`. `AppMenuBar` copies the menus once; call `AppMenuBar::reload` after `set_app_menus`. |
+| 14 | Window buttons | gpui-kit draws minimize/maximize/close as squares `TITLE_BAR_HEIGHT` (34 px) wide, only those `window.window_controls()` allows, and on Linux only with client-side decorations. `TitleBar` can't hide them, so Linux uses its own bar. `cx.button_layout()` gives GNOME's layout (`None` off Linux). `group_active` needs a stateful (`.id(..)`) element. |

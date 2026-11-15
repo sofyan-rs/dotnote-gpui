@@ -101,6 +101,31 @@ fn a_file_changed_on_both_sides_keeps_both_versions() {
 }
 
 #[test]
+fn a_cloned_vault_reports_its_remote() {
+    if !git::is_installed() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let url = remote(dir.path());
+
+    // A plain folder (even one inside another repository) has none.
+    let plain = vault(dir.path(), "plain");
+    assert_eq!(git::existing_remote(&plain), None);
+
+    let cloned = dir.path().join("cloned");
+    let status = Command::new("git")
+        .arg("clone")
+        .arg(&url)
+        .arg(&cloned)
+        .output()
+        .unwrap()
+        .status;
+    assert!(status.success());
+    assert_eq!(git::existing_remote(&cloned).as_deref(), Some(url.as_str()));
+    assert_eq!(git::existing_remote(&cloned.join("..").join("plain")), None);
+}
+
+#[test]
 fn a_bad_address_gives_a_readable_error() {
     if !git::is_installed() {
         return;

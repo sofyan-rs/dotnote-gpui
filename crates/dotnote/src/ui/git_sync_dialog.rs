@@ -16,6 +16,10 @@ use crate::git_sync::GitSync;
 pub fn open(git_sync: Entity<GitSync>, window: &mut Window, cx: &mut App) {
     let current = git_sync.read(cx).remote().map(str::to_string);
     let is_on = current.is_some();
+    // A cloned vault already knows its remote: fill it in so Turn On is one click.
+    let existing = git_sync.read(cx).existing_remote().map(str::to_string);
+    let has_existing = !is_on && existing.is_some();
+    let current = current.or(existing);
     let url = cx.new(|cx| {
         InputState::new(window, cx)
             .placeholder("git@github.com:you/notes.git  or  https://github.com/you/notes.git")
@@ -51,10 +55,13 @@ pub fn open(git_sync: Entity<GitSync>, window: &mut Window, cx: &mut App) {
                     connect(&enter_sync, &enter_url, window, cx)
                 })
                 .gap_3()
-                .child(div().text_sm().text_color(muted).child(
+                .child(div().text_sm().text_color(muted).child(if has_existing {
+                    "This vault is already a git repository with this remote. \
+                     Turn on sync and Dotnote commits and syncs your notes automatically."
+                } else {
                     "Keep this vault in a git repository (like a GitHub repo). \
-                             Dotnote commits and syncs your notes automatically.",
-                ))
+                     Dotnote commits and syncs your notes automatically."
+                }))
                 .child(Input::new(&content_url))
                 .child(div().text_xs().text_color(muted).child(
                     "SSH address (git@github.com:…) if you use an SSH key; HTTPS address \

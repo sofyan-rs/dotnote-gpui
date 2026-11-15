@@ -6,6 +6,8 @@
 use gpui_kit::component::input::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, actions};
 
+use dotnote_core::settings::Appearance;
+
 use crate::platform;
 
 actions!(
@@ -23,6 +25,9 @@ actions!(
         ViewSplit,
         ViewPreview,
         CycleViewMode,
+        AppearanceSystem,
+        AppearanceLight,
+        AppearanceDark,
         QuickSwitcher,
         LockNotes,
         ChangeNotesPassword,
@@ -147,12 +152,24 @@ pub fn bind_keys(cx: &mut App) {
 }
 
 /// The app menus. On macOS these appear in the system menu bar; on Windows and
-/// Linux the same list is drawn inside the title bar.
-pub fn app_menus() -> Vec<Menu> {
+/// Linux the same list is drawn inside the title bar. `appearance` decides which
+/// Theme item has the check mark, so the menus are rebuilt when it changes.
+pub fn app_menus(appearance: Appearance) -> Vec<Menu> {
     vec![
         Menu::new("Dotnote").items([
             MenuItem::action("About Dotnote", About),
             MenuItem::action("Check for Updates…", CheckForUpdates),
+            MenuItem::separator(),
+            MenuItem::submenu(
+                Menu::new("Theme").items([
+                    MenuItem::action("System (Default)", AppearanceSystem)
+                        .checked(appearance == Appearance::System),
+                    MenuItem::action("Dark Mode", AppearanceDark)
+                        .checked(appearance == Appearance::Dark),
+                    MenuItem::action("Light Mode", AppearanceLight)
+                        .checked(appearance == Appearance::Light),
+                ]),
+            ),
             MenuItem::separator(),
             MenuItem::action("Quit Dotnote", Quit),
         ]),

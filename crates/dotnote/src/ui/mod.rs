@@ -18,4 +18,5 @@ pub mod test_helpers;
 pub mod title_bar;
 pub mod unlock_dialog;
 pub mod update_dialog;
+mod window_buttons;
 pub mod workspace;

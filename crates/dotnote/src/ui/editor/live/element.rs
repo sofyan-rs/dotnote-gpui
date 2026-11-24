@@ -212,8 +212,10 @@ impl Element for LiveElement {
             }
         }
 
-        if is_empty {
-            paint_placeholder(origin, &colors, window, cx);
+        if is_empty && let Some(line) = doc.lines.first() {
+            // Same box as the caret on the empty first line, so they line up.
+            let text_origin = point(origin.x + line.text_left, origin.y + line.text_top);
+            paint_placeholder(text_origin, line.line_height, &colors, window, cx);
         }
 
         if focus_handle.is_focused(window)
@@ -306,6 +308,7 @@ fn paint_checkbox(
 
 fn paint_placeholder(
     origin: gpui_kit::Point<Pixels>,
+    line_height: Pixels,
     colors: &Colors,
     window: &mut Window,
     cx: &mut App,
@@ -321,14 +324,7 @@ fn paint_placeholder(
     let line = window
         .text_system()
         .shape_line(PLACEHOLDER.into(), px(FONT_SIZE), &[run], None);
-    if let Err(error) = line.paint(
-        origin,
-        px(FONT_SIZE * 1.6),
-        TextAlign::Left,
-        None,
-        window,
-        cx,
-    ) {
+    if let Err(error) = line.paint(origin, line_height, TextAlign::Left, None, window, cx) {
         log::warn!("Couldn't draw the placeholder: {error}");
     }
 }

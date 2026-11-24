@@ -163,8 +163,11 @@ pub fn line_inputs(
                 }
                 LineKind::CodeBlock | LineKind::Fence => (base * 0.875, base * 1.5, px(0.)),
                 // An empty line is the gap between paragraphs: as tall as the
-                // Preview's paragraph gap, not a full line.
-                LineKind::Paragraph if line.range.is_empty() => (base, base, px(0.)),
+                // Preview's paragraph gap, not a full line. An empty note keeps a
+                // full line, so the caret and the placeholder match typed text.
+                LineKind::Paragraph if line.range.is_empty() && !text.is_empty() => {
+                    (base, base, px(0.))
+                }
                 _ => (base, base * 1.6, px(0.)),
             };
             let text_left = match view.kind {

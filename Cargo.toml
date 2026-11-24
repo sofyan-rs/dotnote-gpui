@@ -6,7 +6,7 @@ members = ["crates/dotnote-core", "crates/dotnote"]
 version = "1.1.0"
 edition = "2024"
 rust-version = "1.92"
-license = "Apache-2.0"
+license = "MIT"
 repository = "https://github.com/sofyan-rs/dotnote-gpui"
 
 [workspace.dependencies]

@@ -31,7 +31,7 @@ tempfile.workspace = true
 [package.metadata.generate-rpm]
 name = "dotnote"
 summary = "A minimal, cross-platform markdown vault app"
-license = "Apache-2.0"
+license = "MIT"
 assets = [
     { source = "target/release/dotnote", dest = "/usr/bin/dotnote", mode = "755" },
     { source = "packaging/linux/id.sofyan.Dotnote.desktop", dest = "/usr/share/applications/id.sofyan.Dotnote.desktop", mode = "644" },

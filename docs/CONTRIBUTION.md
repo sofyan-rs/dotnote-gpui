@@ -50,6 +50,16 @@ Windows PowerShell: `$env:RUST_LOG="dotnote=debug"; cargo run -p dotnote`
 
 **Separate dev settings:** `DOTNOTE_CONFIG_DIR=/tmp/kn-dev cargo run -p dotnote` keeps settings (last vault, view mode) in that folder instead of your real ones. Use it when testing with a throwaway vault while your normal Dotnote is in use.
 
+**Rebuild on save** (GPUI has no hot reload): install [bacon](https://dystroy.org/bacon/) once (`cargo install --locked bacon`), then:
+
+```bash
+bacon dev-win   # Windows: run the app, restart it after every save
+bacon dev       # macOS / Linux
+bacon           # check;  `bacon clippy`, `bacon test` also work (c = clippy)
+```
+
+The `dev` jobs keep settings in `.dev-config/` (git-ignored), so your real Dotnote settings stay untouched. Their `kill` command stops the whole process tree: a leftover app would keep its window open, and on Windows would lock `dotnote.exe` so the next build can't link. Jobs are in `bacon.toml`.
+
 The first build is slow because GPUI is large. Framework crates are built at `opt-level = 3` even in debug (see `[profile.dev.package]` in the root `Cargo.toml`), which makes the first build slower but keeps the debug app responsive.
 
 A test vault: open `fixtures/sample-vault/`. Its `Example.md` uses every markdown element the preview must render.
@@ -61,6 +71,15 @@ A test vault: open `fixtures/sample-vault/`. Its `Example.md` uses every markdow
 | macOS | `packaging/macos/bundle.sh` | `target/release/bundle/macos/Dotnote.app` + `.dmg` + `Dotnote-macos-arm64.zip` (updater package) |
 | Windows | `cargo build --release -p dotnote` | `target/release/dotnote.exe` (icon embedded) |
 | Fedora | `cargo build --release -p dotnote && cargo generate-rpm -p crates/dotnote` (`cargo install cargo-generate-rpm` once) | `target/generate-rpm/*.rpm` |
+| Linux (any) | `packaging/linux/appimage.sh` | `target/release/bundle/appimage/Dotnote-x86_64.AppImage` |
+
+**Copr (dnf repository).** Fedora users can install with `sudo dnf copr enable kurodev/dotnote && sudo dnf install dotnote`; dnf then updates it. Copr builds from source with `packaging/linux/dotnote.spec`. One-time setup:
+1. Fedora account (accounts.fedoraproject.org), then sign in at copr.fedorainfracloud.org.
+2. New project `dotnote`: pick the current Fedora releases (x86_64, aarch64) and turn on **"Enable internet access during builds"** (cargo downloads the crates).
+3. Add a package: source type **SCM**, clone URL `https://github.com/sofyan-rs/dotnote-gpui`, build method **make_srpm** (it runs `.copr/Makefile`). Turn on "Auto-rebuild".
+4. In the project's *Integrations*, copy the GitHub webhook URL into the repo's *Settings → Webhooks* (content type `application/json`, "Just the push event"). Every pushed tag then builds; or click *Rebuild* by hand.
+
+To test the spec locally on Fedora: `make -f .copr/Makefile srpm` then `rpmbuild --rebuild _srpm/*.src.rpm`.
 
 The icon master is `assets/icon/dotnote.png`. After changing it, run `packaging/make_icons.sh` (macOS) and commit the regenerated files.
 
@@ -78,7 +97,7 @@ Don't rename the release assets: the updater looks for those exact names. To tes
 ```
 crates/dotnote-core/   library: pure logic, no GPUI (start at src/lib.rs)
 crates/dotnote/        app: main.rs → app.rs → ui/workspace.rs
-  src/ui/sidebar/      file tree and sidebar header
+  src/ui/sidebar/      workspace switcher, file tree, sidebar header, sync footer
   src/ui/editor/       editor pane, preview, formatter bar, status bar
 fixtures/              sample vault for manual testing
 docs/                  architecture, plan, spike notes

@@ -1,4 +1,5 @@
-//! Dialogs: confirm moving a file or folder to the trash, and About Dotnote.
+//! Dialogs: pick a workspace folder, confirm moving a file or folder to the
+//! trash, and About Dotnote.
 //! (Renaming happens inline in the file tree, see `sidebar/inline_edit.rs`.)
 
 use std::path::{Path, PathBuf};
@@ -7,12 +8,45 @@ use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::button::ButtonVariant;
 use gpui_kit::component::{ActiveTheme as _, v_flex};
 use gpui_kit::{
-    App, Entity, InteractiveElement as _, ParentElement as _, StatefulInteractiveElement as _,
-    Styled as _, TestSupportExt as _, Window, div,
+    App, Entity, InteractiveElement as _, ParentElement as _, PathPromptOptions,
+    StatefulInteractiveElement as _, Styled as _, TestSupportExt as _, Window, div,
 };
 
 use crate::platform;
 use crate::vault_store::VaultStore;
+
+/// Shows the OS folder picker and opens the chosen folder as the vault.
+pub fn pick_vault_folder(vault: Entity<VaultStore>, window: &mut Window, cx: &mut App) {
+    let answer = cx.prompt_for_paths(PathPromptOptions {
+        files: false,
+        directories: true,
+        multiple: false,
+        prompt: Some("Open Workspace".into()),
+    });
+    window
+        .spawn(cx, async move |cx| {
+            match answer.await {
+                // The user picked a folder.
+                Ok(Ok(Some(mut paths))) => {
+                    if let Some(path) = paths.pop() {
+                        vault.update(cx, |vault, cx| vault.open_vault(path, cx));
+                    }
+                }
+                // The system dialog failed (e.g. no portal on Linux).
+                Ok(Err(error)) => {
+                    let _ = cx.update(|window, cx| {
+                        window.push_notification(
+                            format!("Couldn't open the folder picker: {error}"),
+                            cx,
+                        );
+                    });
+                }
+                // Cancelled.
+                _ => {}
+            }
+        })
+        .detach();
+}
 
 /// Asks for confirmation, then moves the item to the OS trash.
 pub fn confirm_trash(vault: Entity<VaultStore>, path: PathBuf, window: &mut Window, cx: &mut App) {
@@ -58,7 +92,7 @@ pub fn about(window: &mut Window, cx: &mut App) {
                 v_flex()
                     .gap_3()
                     .child(div().text_color(muted).child(
-                        "A minimal markdown vault: open a folder, browse it, edit notes. \
+                        "A minimal markdown workspace: open a folder, browse it, edit notes. \
                          Files on disk are the only source of truth.",
                     ))
                     .child(

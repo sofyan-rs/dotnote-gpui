@@ -17,7 +17,7 @@ Scope: **open a folder, browse it, edit markdown.** There are no wikilinks, back
 
 ### Non-goals (for now)
 - Wikilinks, backlinks, tags, graph, plugins, a Dotnote sync service (git sync with the user's own remote is in scope, §6.11).
-- Multiple windows or multiple vaults open at once.
+- Multiple windows or multiple vaults open at once. (One vault is open at a time; the workspace switcher, §6.14, makes switching between vaults one click.)
 - Split editor groups (several tabs side by side).
 - Reloading the open editor's content on *every* outside change (see [§7.3](#73-external-changes-to-the-open-file)); it is reloaded after a git sync.
 
@@ -70,11 +70,13 @@ dotnote-gpui/
 │   │   │   ├── lock.rs        # locked notes: vault password/key, encrypt, lock/unlock
 │   │   │   ├── names.rs       # filename validation (cross-platform rules)
 │   │   │   ├── paths.rs       # relative path, breadcrumb, note title, remap after rename
+│   │   │   ├── recent_vaults.rs # recent workspaces list + each vault's saved tabs
 │   │   │   ├── format.rs      # formatter-bar transforms (bold, link, heading, ...)
 │   │   │   ├── cursor.rs      # byte offset -> (line, col), character count
 │   │   │   ├── line_ending.rs # keep \n or \r\n unchanged across load/save
 │   │   │   ├── settings.rs    # Settings + load/save JSON
 │   │   │   ├── update.rs      # app updates from GitHub Releases (runs `curl`)
+│   │   │   ├── update_install.rs # how this copy was installed; put the update in place
 │   │   │   ├── live.rs        # markdown parts (spans) for Live and Source styling
 │   │   │   ├── live_view.rs   # what each Live line draws; drawn ⇄ file positions
 │   │   │   ├── live_table.rs  # tables: find them, split rows into cells
@@ -101,7 +103,9 @@ dotnote-gpui/
 │               ├── title_bar.rs
 │               ├── window_buttons.rs  # Linux: GNOME-style title bar and window buttons
 │               ├── sidebar/
-│               │   ├── mod.rs         # Sidebar view: header buttons + tree
+│               │   ├── mod.rs         # Sidebar view: switcher + header buttons + tree + footer
+│               │   ├── vault_switcher.rs # workspace switcher (recent workspaces dropdown)
+│               │   ├── sync_footer.rs # git sync status line
 │               │   ├── file_tree.rs   # FileTree (uniform_list rows, drag and drop)
 │               │   ├── inline_edit.rs # rename / new note named inline
 │               │   ├── keyboard.rs    # arrow-key navigation
@@ -123,7 +127,10 @@ dotnote-gpui/
 │               ├── update_dialog.rs   # "update available" / "restart to finish"
 │               ├── quick_switcher.rs
 │               ├── quick_switcher_tests.rs
-│               ├── dialogs.rs         # delete confirmation
+│               ├── settings_dialog.rs # Settings… (theme, updates, workspace shortcuts)
+│               ├── settings_dialog_tests.rs
+│               ├── segmented_control.rs # shared look: view mode switch, theme picker
+│               ├── dialogs.rs         # folder picker, delete confirmation, About
 │               └── empty_state.rs
 ├── assets/icon/dotnote.png    # 1024px app icon master
 ├── fixtures/sample-vault/     # sample notes for manual testing
@@ -131,7 +138,7 @@ dotnote-gpui/
 │   ├── make_icons.sh          # regenerates all icons from the master (macOS)
 │   ├── macos/Dotnote.icns
 │   ├── windows/dotnote.ico
-│   └── linux/icons/hicolor/   # freedesktop icon sizes for Fedora
+│   └── linux/                 # .desktop, icons/hicolor/, dotnote.spec (Copr), appimage.sh
 ├── docs/
 └── .github/workflows/         # CI
 ```
@@ -224,9 +231,11 @@ Methods (each wraps a `dotnote-core` function, then calls `refresh` and updates 
 
 | Method | Behavior |
 |---|---|
-| `open_vault(path)` | Stop the old watcher, set the root, save settings, `refresh`, start the watcher. |
+| `open_vault(path)` | Stop the old watcher, set the root, save settings (`last_vault`, move it to the front of `recent_vaults`), `refresh`, start the watcher. |
+| `open_recent(path)` | Open a vault from the recent list. If its folder is gone, emit `Error` and drop it from the list. Does nothing if it's already open. |
+| `clear_recent()` | Empty the recent list, except the open vault. |
 | `restore_last_vault()` | Read `Settings.last_vault`. If the directory still exists, call `open_vault`; otherwise clear it. |
-| `close_vault()` | Drop the watcher, clear state, forget the saved vault. |
+| `close_vault()` | Drop the watcher, clear state, clear `last_vault` (it stays in the recent list with its tabs). |
 | `refresh()` | Rescan on `cx.background_spawn`, apply the result on the main thread if `scan_generation` still matches, emit `TreeChanged`. Prune `expanded` entries that no longer exist. |
 | `create_note(folder, name)` | Create exactly the typed name (`.md` added unless present), seeded with `# <name>`. Refuses a taken name. Opens the note and emits `NoteCreated` (the editor takes focus). |
 | `create_folder(folder, name)` | Create exactly the typed name. Refuses a taken name. |
@@ -254,11 +263,12 @@ The app isn't sandboxed, so the last vault is stored as a plain path.
 #[derive(Serialize, Deserialize, Default)]
 pub struct Settings {
     pub last_vault: Option<PathBuf>,
+    pub recent_vaults: RecentVaults,  // newest first (max 10), each with its open tabs
     pub view_mode: ViewMode,          // Live | Source | Split | Preview
     pub sidebar_width: Option<f32>,
     pub sidebar_visible: bool,
     pub appearance: Appearance,       // System | Light | Dark
-    // … plus open tabs, synced vaults, update checks
+    // … plus synced vaults, update checks
 }
 ```
 
@@ -294,11 +304,10 @@ Settings are written atomically and saved on change (debounced). A missing or co
 
 ### 6.1 Sidebar (`ui/sidebar/mod.rs`)
 
-The header icon bar, left to right:
+At the top is the workspace switcher (§6.14). Below it, the header icon bar, left to right:
 
 | Icon | Action | Shortcut | Disabled when |
 |---|---|---|---|
-| folder | Open vault… | `secondary-o` | – |
 | square-pen | New file in vault root | `secondary-n` | no vault |
 | folder-plus | New folder in vault root | `secondary-shift-n` | no vault |
 | copy-minus | Collapse Folders (close every folder, like VS Code) | – | no vault |
@@ -307,7 +316,7 @@ The header icon bar, left to right:
 
 Deleting is in the tree's right-click menu, the File menu, and `backspace` / `delete` / `secondary-backspace` *(FileTree context only)*.
 
-The body shows `FileTree` when a vault is open. Otherwise it shows "No Vault Open" and an "Open Vault…" button.
+The body shows `FileTree` when a vault is open. Otherwise it shows "No Workspace Open" and an "Open Workspace…" button.
 
 The delete keybinding is scoped to the `FileTree` key context, so it can never fire while typing in the editor.
 
@@ -342,7 +351,7 @@ If Phase 0 shows that `Tree` can cover all of this cleanly, swapping it in is a 
 A new `EditorPane` entity is created whenever `selected_file` changes, so per-file state never leaks between files.
 
 - **Load:** read the file as UTF-8 (lossy fallback with a warning notification), then `set_value`. Keep the original line ending style (`\n` vs `\r\n`) and write it back unchanged.
-- **Header row:** breadcrumb on the left (path relative to the vault root, vault name omitted, `.md` stripped, last segment highlighted, chevron separators). A segmented control on the right (`ui/editor/view_mode_switch.rs`): muted track, icon + label per mode, the active mode raised; clicking sends the same action as the shortcut, with the shortcut in a tooltip.
+- **Header row:** breadcrumb on the left (path relative to the vault root, vault name omitted, `.md` stripped, last segment highlighted, chevron separators). A segmented control on the right (`ui/editor/view_mode_switch.rs`, styled by the shared `ui/segmented_control.rs`): muted track, icon + label per mode, the active mode raised; clicking sends the same action as the shortcut, with the shortcut in a tooltip.
 - **Formatter bar:** shown in Live, Source, and Split modes (§6.4).
 - **Body:** the four view modes:
 
@@ -409,7 +418,7 @@ With no selection, transforms apply at the cursor position. They fall back to th
 
 ### 6.8 Empty states (`ui/empty_state.rs`)
 
-- No vault: a large muted folder-plus icon, "No Vault Selected", "Open a folder to use it as your vault.", and an [Open Vault…] button.
+- No vault: a large muted folder-plus icon, "No Workspace Selected", "Open a folder to use it as your workspace.", an [Open Workspace…] button, and below it the recent workspaces (one button each, path in the tooltip).
 - Vault open but no file selected: a note icon, "No File Selected", "Select a file from the sidebar to start writing."
 
 ### 6.10 Tabs (`ui/editor_area/`)
@@ -421,7 +430,7 @@ With no selection, transforms apply at the cursor position. They fall back to th
 - **Pinned tabs** stay on the left with a pin icon, and Close Others / to the Right / All skip them. Dragging keeps pinned and unpinned tabs separate.
 - **Tab bar:** click activates; double-click keeps; middle-click closes; drag to reorder; a dot replaces the close button while a note has unsaved changes. Right-click selects the tab and shows: Close (`secondary-w`), Close Others (`secondary-alt-t`), Close to the Right, Close Saved, Close All (`secondary-shift-w`), Pin/Unpin, Copy Path, Copy Relative Path, Reveal in Finder/Explorer. `ctrl-tab` / `ctrl-shift-tab` cycle tabs.
 - **Sync with the vault:** the active tab is the vault's `selected_file` (so the tree highlights it). Renames and moves remap every tab (`TabList::remap`) and its editor. Tabs of notes that no longer exist close without saving.
-- **Restore:** open tabs (order, pin, preview) and the active tab are saved in settings (`open_tabs`, `active_tab`) and reopened for the same vault on launch. Opening another vault saves and closes the old tabs.
+- **Restore:** open tabs (order, pin, preview) and the active tab are saved **per vault**, in that vault's `recent_vaults` entry, on every tab change. They reopen on launch and when switching back to the vault. Opening another vault saves the open notes and closes their tabs. (Settings from before 1.2 kept one vault's tabs at the top level; `Settings::load_from` moves them into the entry of `last_vault`.)
 - Tab actions are bound in the `Workspace` context and forwarded to `EditorArea`, so they work wherever the focus is.
 
 ### 6.9 Live mode (`ui/editor/live/`)
@@ -469,7 +478,7 @@ Optional, per vault. The user enters a repository address (e.g. `https://github.
 - **When** (`GitSync` entity, owned by `Workspace`): on opening the vault, 60 s after the last edit (`EditorAreaEvent::NoteEdited`), every 5 min, on click of the sidebar status, and on quit (commit + a push that gives up after 5 s). Only one sync runs at a time; a request during one runs right after. Open notes are saved (`EditorArea::save_all`) before every sync, and all git work runs on a background thread.
 - **After a pull**: the vault rescans, and open notes whose files changed reload (`EditorPane::reload_from_disk`) unless they have unsaved typing, which wins and is synced next time.
 - **Already a repository** (e.g. a `git clone`): while sync is off, `GitSync` looks up the vault's own `origin` (`git::existing_remote`, which requires `<vault>/.git` so a parent folder's repository never counts). The dialog fills it in and says so, so turning on is one click.
-- **Sidebar footer**: "Set Up Git Sync…" when off; otherwise "Synced N min ago" / "Syncing…" / "Sync failed · click to retry" (error in the tooltip) plus a gear for the dialog (change the address, Turn Off). Turning off removes the remote; the `.git` history stays.
+- **Sidebar footer**: "Set Up Git Sync…" when off; otherwise "Synced N min ago" / "Syncing…" / "Sync failed · click to retry" (error in the tooltip) plus a git-branch button for the dialog (change the address, Turn Off). Not a gear, so it isn't mistaken for the app's Settings (§6.15). Turning off removes the remote; the `.git` history stays.
 - Tests: `dotnote-core/tests/git.rs` syncs two vaults through a local bare repository (round trip, both-sides conflict, bad address, quit push, existing remote of a clone).
 
 ---
@@ -479,7 +488,7 @@ Optional, per vault. The user enters a repository address (e.g. `https://github.
 For notes holding credentials: the note is **encrypted on disk**, so it's unreadable in the vault folder and in its git remote.
 
 - **Format:** a locked note is `Name.md.age`, ASCII-armored [age](https://age-encryption.org) (the `age` crate). It shows in the tree and tabs as `Name.md` with a lock icon; `node::is_markdown` and `paths::note_title` treat `.md.age` as a note, rename keeps the double extension, and git conflict copies become `Name (conflict DATE).md.age`.
-- **One password per vault, protecting a vault key:** `.dotnote-lock.age` at the vault root holds a random age X25519 identity, encrypted with the password (age's scrypt passphrase recipient, ~1 s on purpose). Notes are encrypted to that key, so after one unlock, opening and saving locked notes is fast. The key file is hidden from the tree but synced by git (another computer needs it). Setting the password asks twice, needs ≥ 8 characters, and warns that it can't be recovered. A key file from before the rename (`.kunotes-lock.age`) is renamed to `.dotnote-lock.age` when the vault opens (`lock::migrate_old_key_file`).
+- **One password per vault** (the UI says "workspace password", §6.14)**, protecting a vault key:** `.dotnote-lock.age` at the vault root holds a random age X25519 identity, encrypted with the password (age's scrypt passphrase recipient, ~1 s on purpose). Notes are encrypted to that key, so after one unlock, opening and saving locked notes is fast. The key file is hidden from the tree but synced by git (another computer needs it). Setting the password asks twice, needs ≥ 8 characters, and warns that it can't be recovered. A key file from before the rename (`.kunotes-lock.age`) is renamed to `.dotnote-lock.age` when the vault opens (`lock::migrate_old_key_file`).
 - **Without Dotnote:** `age -d .dotnote-lock.age > key.txt` (asks the password), then `age -d -i key.txt "Name.md.age"`.
 - **`VaultLock`** (owned by `Workspace`) holds the key in memory only while unlocked. It forgets it after 5 minutes without using a locked note (typing touches it), on `secondary-shift-l` / *Lock Notes Now* / the header's lock button, when another vault opens, and when the app quits.
 - **In the editor** (`Secret`: `No` / `Hidden` / `Shown`): a locked note opens hidden (lock screen with *Unlock…*) or, if unlocked, decrypted. Saving a shown note encrypts it (`lock::write_note` → `atomic_write`); a hidden one never saves. When the vault locks, a shown note saves with its own copy of the key, then its editors and preview are **rebuilt empty**, dropping the text and its undo history.
@@ -490,22 +499,44 @@ For notes holding credentials: the note is **encrypted on disk**, so it's unread
 - Tests: `dotnote-core/tests/lock.rs` (password, round trip, wrong password, other vault's key, folder lock/unlock), `ui/note_lock_tests.rs` (lock an open note, encrypted autosave, lock hides the text, unlock restores it, folder lock moves open tabs).
 
 
-### 6.13 App updates (`dotnote-core/src/update.rs`, `updater.rs`, `ui/update_dialog.rs`)
+### 6.13 App updates (`dotnote-core/src/update.rs`, `update_install.rs`, `updater.rs`, `ui/update_dialog.rs`)
 
 Dotnote updates itself from this repository's **GitHub Releases**; there's no Dotnote update server.
 
-- **Publishing** (`.github/workflows/release.yml`): pushing a tag `vX.Y.Z` (it must match the `Cargo.toml` version, or the workflow fails) builds and publishes a release with fixed asset names: `Dotnote-macos-arm64.zip` (the `.app`, zipped with `ditto`), `Dotnote-windows-x64.zip` (`Dotnote.exe`), `Dotnote-fedora-x86_64.rpm`, and `SHA256SUMS`. The `.dmg` (macOS) and `Dotnote-<version>-windows-x64-setup.exe` (Inno Setup, `packaging/windows/dotnote.iss`) are also attached for first installs. The Windows installer installs per user into `%LOCALAPPDATA%\Programs\Dotnote` (no admin), so the updater can replace the exe there.
+- **Publishing** (`.github/workflows/release.yml`): pushing a tag `vX.Y.Z` (it must match the `Cargo.toml` version, or the workflow fails) builds and publishes a release with fixed asset names: `Dotnote-macos-arm64.zip` (the `.app`, zipped with `ditto`), `Dotnote-windows-x64.zip` (`Dotnote.exe`), `Dotnote-fedora-x86_64.rpm`, `Dotnote-x86_64.AppImage` (`packaging/linux/appimage.sh`, built on Ubuntu 22.04 so it runs on that glibc or newer; no libraries bundled), and `SHA256SUMS`. The `.dmg` (macOS) and `Dotnote-<version>-windows-x64-setup.exe` (Inno Setup, `packaging/windows/dotnote.iss`) are also attached for first installs. The Windows installer installs per user into `%LOCALAPPDATA%\Programs\Dotnote` (no admin), so the updater can replace the exe there.
 - **Uses installed programs**, like git sync: `curl` for HTTPS (built into macOS, Windows 10+, Fedora), `ditto` (macOS) and `tar` (Windows) to unpack. No HTTP or TLS library is linked in. On Windows they run with `CREATE_NO_WINDOW`.
 - **Check** (`update::fetch_latest_release`): `GET api.github.com/repos/…/releases/latest`; 404 means nothing released yet. A release is offered when its tag is a higher `major.minor.patch` than `CARGO_PKG_VERSION`. Drafts and pre-releases are never offered.
 - **When** (`Updater` entity, owned by `Workspace`): once, 5 s after launch, in release builds with `Settings::check_for_updates` on (default; quiet unless there's an update), and on *Dotnote → Check for Updates…* (always reports the result).
+- **How this copy was installed** (`update_install::InstallKind`, decided by `InstallKind::detect`, unit-tested): macOS app, Windows exe; on Linux an **AppImage** (the runtime sets `APPIMAGE` to the `.AppImage` file), the **Copr** package (built with `DOTNOTE_PACKAGED_BY=copr`, read with `option_env!`), the **GitHub rpm** (`/usr/bin/dotnote`), or anything else (e.g. `cargo run`), which can't update itself. The kind picks the release asset (`InstallKind::package_name`).
+- **Copr** (`packaging/linux/dotnote.spec`, `.copr/Makefile`): the dnf repository `kurodev/dotnote` builds the rpm from source for each tag. dnf updates it, so the app still checks GitHub but the dialog shows `sudo dnf upgrade --refresh dotnote` instead of *Install Update*.
 - **Install** (`update::download_and_install`, background thread) after the user clicks *Install Update*: download `SHA256SUMS` and this system's package into a temp folder, **refuse it if the SHA-256 doesn't match**, then:
   - macOS: unpack next to the running `Dotnote.app`, rename the running app aside, rename the new one in, remove the old one. Only a bundled app updates itself (a dev build says so).
   - Windows: unpack, rename the running exe to `Dotnote.exe.old` (allowed while running), move the new exe in. The `.old` file is removed on the next launch.
-  - Fedora: `pkexec dnf install -y <rpm>` (system password prompt). Only for the rpm install at `/usr/bin/dotnote`; other installs are told to download it.
+  - GitHub rpm: `pkexec dnf install -y <rpm>` (system password prompt).
+  - AppImage: copy the new file next to the running one, make it executable, and rename it over the old one (`install_appimage`). Linux keeps the running app's file open, so the app goes on until it restarts from the same path. A folder the user can't write to (e.g. `/opt`) gets an error that says to move the AppImage or download it by hand.
   - A failed swap renames the original back, so the app is never left missing.
 - **Restart**: a dialog offers *Restart Now* → `cx.set_restart_path(path)` + `cx.restart()`. GPUI quits (running the save-on-quit handlers, so open notes are saved), waits for the process to exit, then starts the new version. *Later* keeps working; the new version starts next time.
 - Limits: the checksum guards against damaged downloads, not a compromised GitHub account (no separate signing key yet). macOS packages are ad-hoc signed; the updater's download isn't quarantined, so no Gatekeeper prompt. Intel Macs and Linux ARM have no package yet.
-- Tests: `update.rs` unit tests (release JSON, version compare, package names, checksum lines); `dotnote-core/tests/update.rs` (swap, rollback, SHA-256, cleanup; an ignored test calls GitHub).
+- Tests: `update.rs` unit tests (release JSON, version compare, checksum lines); `update_install.rs` unit tests (install kind, package names); `dotnote-core/tests/update.rs` (swap, rollback, AppImage replace, SHA-256, cleanup; an ignored test calls GitHub).
+
+### 6.14 Workspaces: switching vaults (`dotnote-core/src/recent_vaults.rs`, `ui/sidebar/vault_switcher.rs`)
+
+The UI calls a vault a **workspace**; the code keeps the word `vault` (`Workspace` is already the root view). One workspace is open at a time.
+
+- **Recent list** (`RecentVaults`, in `Settings::recent_vaults`): every opened vault moves to the front; at most 10, older ones drop off. Each entry keeps that vault's open tabs (§6.10). Labels are the folder name, plus the parent folder in parentheses when two share a name (`RecentVaults::labels`).
+- **Switcher** at the top of the sidebar: the open workspace's name with a chevron. Its dropdown lists the recent workspaces (the open one checked; click to switch), then *Open Workspace…* (the folder picker, `dialogs::pick_vault_folder`) and *Close Workspace*. Items call `VaultStore` directly rather than dispatching actions, because the open menu holds the focus.
+- **File › Open Recent** lists the same workspaces (`OpenRecentVault { path }`) and *Clear Recent* (`ClearRecentVaults`). `Workspace` rebuilds the app menus (`app::install_menus`) when the list's paths change.
+- **Switching** is `VaultStore::open_recent` → `open_vault`, so it does what opening a folder does: open notes are saved and their tabs closed, the vault lock forgets its key, git sync follows the new vault, and the new vault's tabs come back. A folder that no longer exists is reported and dropped from the list.
+- Tests: `recent_vaults.rs` unit tests (order, cap, tabs kept, labels, JSON shape); `dotnote-core/tests/settings.rs` (old top-level tabs move into the list); `ui/editor_area/editor_area_tests.rs` (switching saves typing and brings back each vault's tabs; a missing folder is dropped).
+
+### 6.15 Settings dialog (`ui/settings_dialog.rs`)
+
+Opened with *Dotnote › Settings…* or `secondary-,` (`OpenSettings`). It only gathers settings that already exist; it is not a place to add new options. Choices the app remembers by itself (view mode, sidebar width and visibility) stay where they're used.
+
+- **General:** Theme (System / Light / Dark with icons, the same segmented control as the view mode switch, `ui/segmented_control.rs`; same as the *Theme* menu, which stays) and *Check for updates at launch* (`Settings::check_for_updates`, a switch; before this it had no UI).
+- **Workspace** (the open one): its name and path; Git sync (On/Off, *Git Sync…* opens §6.11's dialog); Notes password (*Change…* opens §6.12's dialog); Recent workspaces (*Clear* empties the switcher list except the open one). Without an open workspace, a short hint.
+- The dialog content is rebuilt on every frame (gpui-kit calls the `open_dialog` builder in `Root`'s render), so it reads `SettingsStore` directly and keeps no copy. Controls save, then `window.refresh()` so it redraws. Buttons that open another dialog close this one first, so dialogs don't stack.
+- Tests: `ui/settings_dialog_tests.rs` (opens; theme and update switch change the settings).
 
 ---
 
@@ -556,10 +587,11 @@ Use GPUI's `secondary-` modifier, which is `cmd` on macOS and `ctrl` on Windows 
 
 | Action | Binding | Context |
 |---|---|---|
-| Open vault | `secondary-o` | Workspace |
+| Open workspace (vault) | `secondary-o` | Workspace |
 | New file | `secondary-n` | Workspace |
 | New folder | `secondary-shift-n` | Workspace |
 | Quick switcher | `secondary-k`, `secondary-shift-o` | Workspace |
+| Settings | `secondary-,` | Workspace |
 | Save now | `secondary-s` | EditorPane |
 | Toggle sidebar | `secondary-\` | Workspace |
 | View: Live / Source / Split / Preview | `secondary-1` / `secondary-2` / `secondary-3` / `secondary-4` | Workspace |
@@ -612,7 +644,7 @@ A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa
 
 | Area | Features | Spec |
 |---|---|---|
-| Vault | Open a folder via the native picker, reopen the last vault on launch | §4.1, §4.3 |
+| Vault | Open a folder via the native picker, reopen the last vault on launch; switch between recent vaults ("workspaces") with their tabs | §4.1, §4.3, §6.14 |
 | File tree | Folders + `.md` only, folders first, natural sort; click to select, double-click or chevron to expand; keyboard nav; drag-and-drop move; context menu | §6.2, §8.3 |
 | File ops | New note / folder and rename, named inline in the tree (auto `.md`, validated, taken names refused), delete to OS trash with confirmation | §4.1, §6.2, §6.7, §8.2 |
 | Editor | Live (realtime formatter), Source (highlighted raw markdown), Split, Preview modes on one text buffer; formatter bar, breadcrumb, status bar (Ln/Col, characters) | §6.3, §6.4, §6.9 |
@@ -623,8 +655,9 @@ A Wayland or X11 session with a working Vulkan driver (`vulkan-loader` plus Mesa
 | Live sync | Changes made outside the app appear in the tree | §7.2 |
 | Git sync | Optional: sync the vault with the user's git remote (auto + manual), conflicts kept as copies | §6.11 |
 | Locked notes | Encrypt notes with credentials (age, one vault password), one note or a whole folder, auto-lock after 5 min | §6.12 |
-| Updates | Check GitHub Releases at launch and on demand; download, verify (SHA-256), install, restart | §6.13 |
+| Updates | Check GitHub Releases at launch and on demand; download, verify (SHA-256), install, restart (AppImage too); the Copr package is updated by dnf | §6.13 |
 | Layout | Resizable, toggleable sidebar; view mode and sidebar width remembered; theme System / Dark / Light | §5, §4.3 |
+| Settings | One dialog for theme, update checks, and the open workspace's sync / password / recent list | §6.15 |
 
 ---
 
@@ -648,3 +681,7 @@ Answered from crate source.
 | 12 | Clickable title bar controls | `TitleBar` marks its row `WindowControlArea::Drag`. On Windows any hitbox stack containing it answers `HTCAPTION`, so the OS eats clicks. Wrap each clickable child in `div().occlude()` (as `AppMenuBar` does). |
 | 13 | Checked menu items | `MenuItem::action(..).checked(bool)` and `MenuItem::submenu(Menu)` work in the native menu and in `AppMenuBar`. `AppMenuBar` copies the menus once; call `AppMenuBar::reload` after `set_app_menus`. |
 | 14 | Window buttons | gpui-kit draws minimize/maximize/close as squares `TITLE_BAR_HEIGHT` (34 px) wide, only those `window.window_controls()` allows, and on Linux only with client-side decorations. `TitleBar` can't hide them, so Linux uses its own bar. `cx.button_layout()` gives GNOME's layout (`None` off Linux). `group_active` needs a stateful (`.id(..)`) element. |
+| 15 | Dropdown menu on a button | `gpui_kit::component::menu::DropdownMenu` (`button.dropdown_menu(\|menu, window, cx\| ..)`), built each time it opens. `PopupMenuItem::new(label).checked(..).on_click(..)`. While the menu is open it holds the focus, so an item's action dispatch may not reach the workspace's handlers: items call entities directly (§6.14). |
+| 16 | Dialog content | `window.open_dialog` keeps the builder closure and calls it on every render of `Root`, so a dialog can read live state (§6.15). After changing state that `Root` doesn't observe, call `window.refresh()`. Dialogs stack (`active_dialogs`); `close_dialog` closes the top one. |
+| 17 | `Switch` | Controlled: `.checked(value)` shows what it's given; `.on_change(\|checked, window, cx\| ..)` must save the new value and redraw. |
+| 18 | `.test_support()` type | With the `test-support` feature (UI tests) it wraps the element (`Observed<E>`); without it, it returns `E`. A helper that returns such an element must return `impl IntoElement + StatefulInteractiveElement`, not `Stateful<Div>` (`ui/segmented_control.rs`). |

@@ -6,6 +6,7 @@
 use gpui_kit::component::input::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, actions};
 
+use dotnote_core::recent_vaults::RecentVaults;
 use dotnote_core::settings::Appearance;
 
 use crate::platform;
@@ -15,6 +16,7 @@ actions!(
     [
         OpenVault,
         CloseVault,
+        ClearRecentVaults,
         NewFile,
         NewFolder,
         ToggleSidebar,
@@ -33,10 +35,18 @@ actions!(
         ChangeNotesPassword,
         CollapseFolders,
         About,
+        OpenSettings,
         CheckForUpdates,
         Quit,
     ]
 );
+
+/// Opens a vault from the recent list (File > Open Recent).
+#[derive(Clone, PartialEq, Debug, gpui_kit::Action)]
+#[action(namespace = dotnote, no_json)]
+pub struct OpenRecentVault {
+    pub path: std::path::PathBuf,
+}
 
 /// Locks a note (encrypts it) or removes its lock. Sent by the file tree's menu.
 #[derive(Clone, PartialEq, Debug, gpui_kit::Action)]
@@ -115,6 +125,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("secondary-shift-n", NewFolder, Some(WORKSPACE)),
         KeyBinding::new("secondary-\\", ToggleSidebar, Some(WORKSPACE)),
         KeyBinding::new("secondary-k", QuickSwitcher, Some(WORKSPACE)),
+        KeyBinding::new("secondary-,", OpenSettings, Some(WORKSPACE)),
         KeyBinding::new("secondary-w", CloseTab, Some(WORKSPACE)),
         KeyBinding::new("secondary-alt-t", CloseOtherTabs, Some(WORKSPACE)),
         KeyBinding::new("secondary-shift-w", CloseAllTabs, Some(WORKSPACE)),
@@ -153,13 +164,15 @@ pub fn bind_keys(cx: &mut App) {
 
 /// The app menus. On macOS these appear in the system menu bar; on Windows and
 /// Linux the same list is drawn inside the title bar. `appearance` decides which
-/// Theme item has the check mark, so the menus are rebuilt when it changes.
-pub fn app_menus(appearance: Appearance) -> Vec<Menu> {
+/// Theme item has the check mark and `recent` fills File > Open Recent, so the
+/// menus are rebuilt when either changes.
+pub fn app_menus(appearance: Appearance, recent: &RecentVaults) -> Vec<Menu> {
     vec![
         Menu::new("Dotnote").items([
             MenuItem::action("About Dotnote", About),
             MenuItem::action("Check for Updates…", CheckForUpdates),
             MenuItem::separator(),
+            MenuItem::action("Settings…", OpenSettings),
             MenuItem::submenu(
                 Menu::new("Theme").items([
                     MenuItem::action("System (Default)", AppearanceSystem)
@@ -174,7 +187,8 @@ pub fn app_menus(appearance: Appearance) -> Vec<Menu> {
             MenuItem::action("Quit Dotnote", Quit),
         ]),
         Menu::new("File").items([
-            MenuItem::action("Open Vault…", OpenVault),
+            MenuItem::action("Open Workspace…", OpenVault),
+            MenuItem::submenu(open_recent_menu(recent)),
             MenuItem::action("Quick Open…", QuickSwitcher),
             MenuItem::separator(),
             MenuItem::action("New Note", NewFile),
@@ -189,7 +203,7 @@ pub fn app_menus(appearance: Appearance) -> Vec<Menu> {
             MenuItem::action("Close Tab", CloseTab),
             MenuItem::action("Close All Tabs", CloseAllTabs),
             MenuItem::separator(),
-            MenuItem::action("Close Vault", CloseVault),
+            MenuItem::action("Close Workspace", CloseVault),
         ]),
         // These are the text editor's own actions; its shortcuts show next to them.
         Menu::new("Edit").items([
@@ -210,4 +224,26 @@ pub fn app_menus(appearance: Appearance) -> Vec<Menu> {
             MenuItem::action("Preview", ViewPreview),
         ]),
     ]
+}
+
+/// File > Open Recent: one item per remembered vault, then Clear Recent.
+fn open_recent_menu(recent: &RecentVaults) -> Menu {
+    let mut items: Vec<MenuItem> = recent
+        .list()
+        .iter()
+        .zip(recent.labels())
+        .map(|(vault, label)| {
+            MenuItem::action(
+                label,
+                OpenRecentVault {
+                    path: vault.path.clone(),
+                },
+            )
+        })
+        .collect();
+    if !items.is_empty() {
+        items.push(MenuItem::separator());
+    }
+    items.push(MenuItem::action("Clear Recent", ClearRecentVaults));
+    Menu::new("Open Recent").items(items)
 }

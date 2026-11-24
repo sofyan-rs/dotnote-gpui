@@ -36,7 +36,7 @@ pub fn open(
         dialog
             .w(px(420.))
             .title(if creating {
-                "Set a Vault Password"
+                "Set a Workspace Password"
             } else {
                 "Unlock Notes"
             })
@@ -71,7 +71,7 @@ impl UnlockForm {
         let password = cx.new(|cx| {
             InputState::new(window, cx)
                 .masked(true)
-                .placeholder("Vault password")
+                .placeholder("Workspace password")
         });
         let repeat = cx.new(|cx| {
             InputState::new(window, cx)
@@ -146,7 +146,7 @@ impl Render for UnlockForm {
             "Locked notes are encrypted with this password. It's asked once, then \
              notes stay unlocked until 5 minutes without use or until Dotnote quits."
         } else {
-            "Enter the vault password to unlock locked notes."
+            "Enter the workspace password to unlock locked notes."
         };
         v_flex()
             // Enter in either field submits (see `actions::FORM`).

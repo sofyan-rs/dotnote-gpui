@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use dotnote_core::update::{self, Release};
+use dotnote_core::update_install;
 use gpui_kit::{AppContext as _, Context, EventEmitter, Task};
 
 use crate::settings_store::SettingsStore;
@@ -51,7 +52,7 @@ impl Updater {
         cx.background_spawn(async {
             if let Err(error) = std::env::current_exe()
                 .map_err(Into::into)
-                .and_then(|exe| update::clean_up_after_update(&exe))
+                .and_then(|exe| update_install::clean_up_after_update(&exe))
             {
                 log::warn!("couldn't remove the previous version: {error}");
             }

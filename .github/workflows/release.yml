@@ -5,8 +5,10 @@ name: Release
 #
 # The in-app updater (crates/dotnote-core/src/update.rs) looks for these exact
 # asset names in the latest release, plus SHA256SUMS:
-#   Dotnote-macos-arm64.zip, Dotnote-windows-x64.zip, Dotnote-fedora-x86_64.rpm
+#   Dotnote-macos-arm64.zip, Dotnote-windows-x64.zip, Dotnote-fedora-x86_64.rpm,
+#   Dotnote-x86_64.AppImage
 # The .dmg and the Windows setup.exe are for first installs only.
+# The Copr repository (dnf) builds from the tag itself, see packaging/linux/dotnote.spec.
 on:
   push:
     tags: ["v*"]
@@ -105,10 +107,29 @@ jobs:
           name: fedora
           path: Dotnote-fedora-x86_64.rpm
 
+  appimage:
+    name: Linux (.AppImage)
+    needs: version
+    # The oldest supported Ubuntu: an AppImage runs on systems with this glibc or newer.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake pkg-config file             libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev             libx11-dev libx11-xcb-dev libssl-dev libzstd-dev libvulkan-dev             libwebkit2gtk-4.1-dev
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - run: packaging/linux/appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: target/release/bundle/appimage/Dotnote-x86_64.AppImage
+
   publish:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [macos, windows, fedora]
+    needs: [macos, windows, fedora, appimage]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

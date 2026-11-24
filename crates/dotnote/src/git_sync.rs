@@ -268,7 +268,9 @@ impl GitSync {
                         sync.start_ticker(cx);
                         sync.sync_now(cx);
                     }
-                    None => sync.status = SyncStatus::Failed("The vault has no git remote.".into()),
+                    None => {
+                        sync.status = SyncStatus::Failed("The workspace has no git remote.".into())
+                    }
                 }
                 cx.notify();
             });

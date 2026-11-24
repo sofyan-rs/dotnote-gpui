@@ -1,9 +1,11 @@
 //! App update dialogs: "a new version is available" and "restart to finish".
-//! The work itself happens in `updater.rs`.
+//! The work itself happens in `updater.rs`. A copy installed from the dnf
+//! repository (Copr) gets the dnf command instead of an Install button.
 
 use std::path::PathBuf;
 
 use dotnote_core::update::Release;
+use dotnote_core::update_install::InstallKind;
 use gpui_kit::component::{ActiveTheme as _, WindowExt as _, v_flex};
 use gpui_kit::{
     App, Entity, InteractiveElement as _, ParentElement as _, StatefulInteractiveElement as _,
@@ -14,6 +16,10 @@ use crate::updater::Updater;
 
 /// Offers to install `release`, with a link to its release notes.
 pub fn offer_update(release: Release, updater: Entity<Updater>, window: &mut Window, cx: &mut App) {
+    if InstallKind::current() == InstallKind::DnfRepo {
+        tell_dnf_update(release, window, cx);
+        return;
+    }
     window.open_alert_dialog(cx, move |alert, _, cx| {
         let (release, updater) = (release.clone(), updater.clone());
         let page_url = release.page_url.clone();
@@ -47,6 +53,41 @@ pub fn offer_update(release: Release, updater: Entity<Updater>, window: &mut Win
                 updater.update(cx, |updater, cx| updater.install(release, cx));
                 true
             })
+    });
+}
+
+/// Installed with dnf from the Copr repository: dnf updates it, not Dotnote.
+fn tell_dnf_update(release: Release, window: &mut Window, cx: &mut App) {
+    window.open_alert_dialog(cx, move |alert, _, cx| {
+        let page_url = release.page_url.clone();
+        let muted = cx.theme().muted_foreground;
+        let link_color = cx.theme().link;
+        alert
+            .title(format!("Dotnote {} is available", release.version))
+            .description(
+                v_flex()
+                    .gap_3()
+                    .child(div().text_color(muted).child(format!(
+                        "You have version {}. Dotnote was installed with dnf, so update it                          in a terminal (or with your system's software updates):",
+                        env!("CARGO_PKG_VERSION")
+                    )))
+                    .child(
+                        div()
+                            .font_family("monospace")
+                            .text_sm()
+                            .child("sudo dnf upgrade --refresh dotnote"),
+                    )
+                    .child(
+                        div()
+                            .id("update-release-notes")
+                            .text_color(link_color)
+                            .cursor_pointer()
+                            .hover(|style| style.underline())
+                            .child("What's new")
+                            .on_click(move |_, _, cx| cx.open_url(&page_url)),
+                    ),
+            )
+            .ok_text("OK")
     });
 }
 

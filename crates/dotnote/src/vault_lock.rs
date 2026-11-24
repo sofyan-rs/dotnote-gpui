@@ -70,7 +70,7 @@ impl VaultLock {
     /// the error to show, if any.
     pub fn unlock(&mut self, password: String, cx: &mut Context<Self>) -> Task<Result<(), String>> {
         let Some(root) = self.root.clone() else {
-            return Task::ready(Err("No vault is open.".into()));
+            return Task::ready(Err("No workspace is open.".into()));
         };
         let create = !lock::has_password(&root);
         cx.spawn(async move |this, cx| {
@@ -99,7 +99,7 @@ impl VaultLock {
         cx: &mut Context<Self>,
     ) -> Task<Result<(), String>> {
         let Some(root) = self.root.clone() else {
-            return Task::ready(Err("No vault is open.".into()));
+            return Task::ready(Err("No workspace is open.".into()));
         };
         cx.spawn(async move |this, cx| {
             let result = cx

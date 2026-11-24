@@ -1,5 +1,5 @@
 //! The bottom line of the sidebar: git sync status. Click it to sync now;
-//! the gear opens the Git Sync dialog. Without sync, it offers to set it up.
+//! the branch button opens the Git Sync dialog. Without sync, it offers to set it up.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -86,8 +86,9 @@ pub fn render(git_sync: &Entity<GitSync>, cx: &App) -> impl IntoElement {
         Button::new("git-sync-settings")
             .ghost()
             .xsmall()
-            .icon(IconName::Settings)
-            .tooltip("Git Sync…")
+            // A branch, not a gear: the gear would look like the app's Settings.
+            .icon(IconName::GitBranch)
+            .tooltip("Git Sync Options…")
             .on_click(open_dialog),
     )
     .into_any_element()

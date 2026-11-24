@@ -111,7 +111,7 @@ impl EditorPane {
                 div()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child("Enter the vault password to show it."),
+                    .child("Enter the workspace password to show it."),
             )
             .child(
                 Button::new("unlock-note")

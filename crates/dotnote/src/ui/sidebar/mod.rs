@@ -1,5 +1,6 @@
-//! The sidebar: a row of action buttons on top, the vault's file tree below,
-//! and the git sync status at the bottom (`sync_footer.rs`).
+//! The sidebar: the workspace switcher (`vault_switcher.rs`) and a row of
+//! action buttons on top, the vault's file tree below, and the git sync status
+//! at the bottom (`sync_footer.rs`).
 
 mod context_menu;
 mod file_tree;
@@ -10,6 +11,7 @@ mod file_tree_tests;
 mod inline_edit;
 mod keyboard;
 mod sync_footer;
+mod vault_switcher;
 
 use std::path::PathBuf;
 
@@ -74,13 +76,6 @@ impl Sidebar {
             .border_b_1()
             .border_color(cx.theme().sidebar_border)
             .child(header_button(
-                "open-vault",
-                IconName::Folder,
-                "Open Vault…",
-                &OpenVault,
-                true,
-            ))
-            .child(header_button(
                 "new-file",
                 IconName::SquarePen,
                 "New Note",
@@ -121,12 +116,12 @@ impl Sidebar {
                 div()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child("No Vault Open"),
+                    .child("No Workspace Open"),
             )
             .child(
                 Button::new("sidebar-open-vault")
                     .small()
-                    .label("Open Vault…")
+                    .label("Open Workspace…")
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenVault), cx)),
             )
     }
@@ -141,6 +136,7 @@ impl Render for Sidebar {
             .text_color(cx.theme().sidebar_foreground)
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
+            .child(vault_switcher::render(&self.vault, cx))
             .child(self.render_header(has_vault, cx))
             .child(if has_vault {
                 div()

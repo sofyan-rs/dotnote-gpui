@@ -9,14 +9,7 @@
 //! [`package_name`]) and a `SHA256SUMS` file. A download whose checksum doesn't
 //! match is never installed.
 //!
-//! Installing, per system:
-//! - **macOS:** the new `Dotnote.app` replaces the running one (renaming a
-//!   running app is allowed; it keeps running from the old files).
-//! - **Windows:** the new `Dotnote.exe` replaces the running one, which is
-//!   renamed to `Dotnote.exe.old` first (Windows can rename, but not delete, a
-//!   running exe). The leftover is removed on the next launch.
-//! - **Fedora:** the `.rpm` is installed with `pkexec dnf install`, which asks
-//!   for the administrator password.
+//! Putting the download in place of the running app is in `update_install.rs`.
 //!
 //! Everything here blocks, so the app calls it on a background thread.
 
@@ -29,15 +22,13 @@ use serde::Deserialize;
 use sha2::{Digest as _, Sha256};
 
 use crate::error::{CoreError, Result};
+use crate::update_install::{InstallKind, install};
 
 /// The GitHub repository that publishes Dotnote releases.
 pub const REPOSITORY: &str = "sofyan-rs/dotnote-gpui";
 
 /// Checksums of every package in a release, as written by `sha256sum`.
 pub const CHECKSUMS_NAME: &str = "SHA256SUMS";
-
-/// Where the rpm installs Dotnote on Fedora.
-const LINUX_INSTALL_PATH: &str = "/usr/bin/dotnote";
 
 /// A published release.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,23 +113,6 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
     }
 }
 
-/// The release package for a system (`std::env::consts::OS` and `ARCH`),
-/// or `None` if releases don't include one for it.
-pub fn package_name(os: &str, arch: &str) -> Option<&'static str> {
-    match (os, arch) {
-        ("macos", "aarch64") => Some("Dotnote-macos-arm64.zip"),
-        ("macos", "x86_64") => Some("Dotnote-macos-x64.zip"),
-        ("windows", "x86_64") => Some("Dotnote-windows-x64.zip"),
-        ("linux", "x86_64") => Some("Dotnote-fedora-x86_64.rpm"),
-        _ => None,
-    }
-}
-
-/// The package for the computer Dotnote is running on.
-pub fn this_package_name() -> Option<&'static str> {
-    package_name(std::env::consts::OS, std::env::consts::ARCH)
-}
-
 /// Finds `name`'s checksum (lowercase hex) in a `SHA256SUMS` file.
 pub fn checksum_for(sums: &str, name: &str) -> Option<String> {
     sums.lines().find_map(|line| {
@@ -203,9 +177,11 @@ pub fn download(url: &str, dest: &Path) -> Result<()> {
 /// Downloads this computer's package from `release` into `dir` and checks it
 /// against the release's checksums. Returns the package's path.
 pub fn download_package(release: &Release, dir: &Path) -> Result<PathBuf> {
-    let name = this_package_name().ok_or_else(|| {
-        CoreError::Update("Updates aren't published for this kind of computer.".into())
-    })?;
+    let name = InstallKind::current()
+        .package_name(std::env::consts::ARCH)
+        .ok_or_else(|| {
+            CoreError::Update("Updates aren't published for this kind of computer.".into())
+        })?;
     let missing = || CoreError::Update(format!("Release {} has no {name}.", release.version));
     let package = release.asset(name).ok_or_else(missing)?;
     let sums = release.asset(CHECKSUMS_NAME).ok_or_else(|| {
@@ -235,137 +211,17 @@ pub fn download_package(release: &Release, dir: &Path) -> Result<PathBuf> {
 /// temporary folder that's removed afterwards. Returns the path to start the
 /// new version from.
 pub fn download_and_install(release: &Release) -> Result<PathBuf> {
+    let kind = InstallKind::current();
     let dir = std::env::temp_dir().join(format!("dotnote-update-{}", release.version));
     let result = download_package(release, &dir)
-        .and_then(|package| install(&package, &std::env::current_exe()?));
+        .and_then(|package| install(&kind, &package, &std::env::current_exe()?));
     // A leftover download is harmless, so only an install failure is reported.
     let _cleanup = remove_if_exists(&dir);
     result
 }
 
-/// Installs a downloaded package in place of the running app (`current_exe`).
-/// Returns the path to start the new version from.
-pub fn install(package: &Path, current_exe: &Path) -> Result<PathBuf> {
-    match std::env::consts::OS {
-        "macos" => install_macos(package, current_exe),
-        "windows" => install_windows(package, current_exe),
-        "linux" => install_linux(package, current_exe),
-        _ => Err(CoreError::Update(
-            "Updates aren't supported on this system.".into(),
-        )),
-    }
-}
-
-fn install_macos(zip: &Path, current_exe: &Path) -> Result<PathBuf> {
-    // The exe is at Dotnote.app/Contents/MacOS/dotnote.
-    let bundle = current_exe
-        .ancestors()
-        .find(|path| path.extension().is_some_and(|ext| ext == "app"))
-        .ok_or_else(|| {
-            CoreError::Update("Only Dotnote.app can update itself (this is a dev build).".into())
-        })?
-        .to_path_buf();
-    let folder = parent_of(&bundle)?;
-    // Unpack next to the app, so the swap below is a rename on the same disk.
-    let staging = folder.join(".Dotnote-update");
-    remove_if_exists(&staging)?;
-    run(Command::new("ditto")
-        .arg("-x")
-        .arg("-k")
-        .arg(zip)
-        .arg(&staging))?;
-    let new_app = staging.join("Dotnote.app");
-    if !new_app.join("Contents/MacOS/dotnote").is_file() {
-        return Err(CoreError::Update(
-            "The update package doesn't contain Dotnote.app.".into(),
-        ));
-    }
-    let old = folder.join(".Dotnote-old.app");
-    replace_with(&bundle, &new_app, &old)?;
-    remove_if_exists(&old)?;
-    remove_if_exists(&staging)?;
-    Ok(bundle)
-}
-
-fn install_windows(zip: &Path, current_exe: &Path) -> Result<PathBuf> {
-    let folder = parent_of(current_exe)?;
-    let staging = folder.join(".dotnote-update");
-    remove_if_exists(&staging)?;
-    fs::create_dir_all(&staging)?;
-    // `tar` ships with Windows 10 and later, and reads zip files.
-    run(Command::new("tar")
-        .arg("-xf")
-        .arg(zip)
-        .arg("-C")
-        .arg(&staging))?;
-    let new_exe = staging.join("Dotnote.exe");
-    if !new_exe.is_file() {
-        return Err(CoreError::Update(
-            "The update package doesn't contain Dotnote.exe.".into(),
-        ));
-    }
-    let old = old_exe_path(current_exe);
-    remove_if_exists(&old)?; // from an earlier update
-    replace_with(current_exe, &new_exe, &old)?;
-    remove_if_exists(&staging)?;
-    // `old` is still running; it's removed on the next launch.
-    Ok(current_exe.to_path_buf())
-}
-
-fn install_linux(rpm: &Path, current_exe: &Path) -> Result<PathBuf> {
-    if current_exe != Path::new(LINUX_INSTALL_PATH) {
-        return Err(CoreError::Update(
-            "Only the Dotnote rpm package can update itself. Download the new version from the release page.".into(),
-        ));
-    }
-    // pkexec shows the system's password prompt, then dnf upgrades the package.
-    let output = Command::new("pkexec")
-        .args(["dnf", "install", "-y"])
-        .arg(rpm)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| CoreError::Update(format!("Couldn't run pkexec: {error}")))?;
-    match output.status.code() {
-        Some(0) => Ok(PathBuf::from(LINUX_INSTALL_PATH)),
-        // pkexec: 126 = the password prompt was dismissed, 127 = not authorized.
-        Some(126 | 127) => Err(CoreError::Update("The update was cancelled.".into())),
-        _ => Err(CoreError::Update(format!(
-            "dnf couldn't install the update: {}",
-            last_line(&output.stderr)
-        ))),
-    }
-}
-
-/// Puts `new` at `target`, moving what was there to `old`. If the second
-/// rename fails, the original is moved back so the app is never left missing.
-pub fn replace_with(target: &Path, new: &Path, old: &Path) -> Result<()> {
-    fs::rename(target, old)?;
-    if let Err(error) = fs::rename(new, target) {
-        return Err(match fs::rename(old, target) {
-            Ok(()) => error.into(),
-            Err(restore) => CoreError::Update(format!(
-                "Couldn't install the update ({error}) or put the old version back ({restore}). It's at {}.",
-                old.display()
-            )),
-        });
-    }
-    Ok(())
-}
-
-/// Where Windows keeps the replaced exe until the next launch: `Dotnote.exe.old`.
-pub fn old_exe_path(exe: &Path) -> PathBuf {
-    let mut name = exe.file_name().unwrap_or_default().to_os_string();
-    name.push(".old");
-    exe.with_file_name(name)
-}
-
-/// Removes what an earlier update left behind (Windows' old exe). Call at startup.
-pub fn clean_up_after_update(current_exe: &Path) -> Result<()> {
-    remove_if_exists(&old_exe_path(current_exe))
-}
-
 /// Removes an updater file or folder (never vault content).
-fn remove_if_exists(path: &Path) -> Result<()> {
+pub(crate) fn remove_if_exists(path: &Path) -> Result<()> {
     let result = if path.is_dir() {
         fs::remove_dir_all(path)
     } else {
@@ -377,7 +233,7 @@ fn remove_if_exists(path: &Path) -> Result<()> {
     }
 }
 
-fn parent_of(path: &Path) -> Result<&Path> {
+pub(crate) fn parent_of(path: &Path) -> Result<&Path> {
     path.parent()
         .ok_or_else(|| CoreError::Update(format!("{} has no folder.", path.display())))
 }
@@ -395,7 +251,7 @@ fn curl() -> Command {
 }
 
 /// Runs a command; a failure's text is its last line of error output.
-fn run(command: &mut Command) -> Result<Output> {
+pub(crate) fn run(command: &mut Command) -> Result<Output> {
     command.stdin(Stdio::null());
     // A windowed app on Windows would flash a console window for each run.
     #[cfg(windows)]
@@ -417,7 +273,7 @@ fn run(command: &mut Command) -> Result<Output> {
     Ok(output)
 }
 
-fn last_line(bytes: &[u8]) -> String {
+pub(crate) fn last_line(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     text.lines()
         .rev()
@@ -477,23 +333,6 @@ mod tests {
     }
 
     #[test]
-    fn one_package_per_system() {
-        assert_eq!(
-            package_name("macos", "aarch64"),
-            Some("Dotnote-macos-arm64.zip")
-        );
-        assert_eq!(
-            package_name("windows", "x86_64"),
-            Some("Dotnote-windows-x64.zip")
-        );
-        assert_eq!(
-            package_name("linux", "x86_64"),
-            Some("Dotnote-fedora-x86_64.rpm")
-        );
-        assert_eq!(package_name("linux", "aarch64"), None);
-    }
-
-    #[test]
     fn finds_checksum_lines() {
         let sums = "ABC123  Dotnote-macos-arm64.zip\n\
                     def456 *Dotnote-windows-x64.zip\n";
@@ -506,13 +345,5 @@ mod tests {
             Some("def456")
         );
         assert_eq!(checksum_for(sums, "Dotnote-fedora-x86_64.rpm"), None);
-    }
-
-    #[test]
-    fn old_exe_keeps_its_name() {
-        assert_eq!(
-            old_exe_path(Path::new("C:/Apps/Dotnote.exe")),
-            Path::new("C:/Apps/Dotnote.exe.old")
-        );
     }
 }

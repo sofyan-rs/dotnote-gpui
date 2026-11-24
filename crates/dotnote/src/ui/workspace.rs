@@ -1,27 +1,32 @@
 //! The root view of the main window: title bar on top, sidebar and editor area below.
 
+use std::path::PathBuf;
+
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode, WindowExt as _, v_flex};
 use gpui_kit::{
     App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
-    ParentElement as _, PathPromptOptions, Render, Styled as _, Subscription, Window, px, rgb,
+    ParentElement as _, Render, Styled as _, Subscription, Window, px, rgb,
 };
 
 use dotnote_core::settings::{Appearance, ViewMode};
 
 use crate::actions::{
     About, AppearanceDark, AppearanceLight, AppearanceSystem, ChangeNotesPassword, CheckForUpdates,
-    CloseAllTabs, CloseOtherTabs, CloseSavedTabs, CloseTab, CloseTabsToTheRight, CloseVault,
-    CollapseFolders, CycleViewMode, DeleteSelection, LockNotes, NewFile, NewFolder, NextTab,
-    OpenVault, PreviousTab, QuickSwitcher, RenameSelection, SetFolderLock, ToggleNoteLock,
-    TogglePinTab, ToggleSidebar, ViewLive, ViewPreview, ViewSource, ViewSplit, WORKSPACE,
+    ClearRecentVaults, CloseAllTabs, CloseOtherTabs, CloseSavedTabs, CloseTab, CloseTabsToTheRight,
+    CloseVault, CollapseFolders, CycleViewMode, DeleteSelection, LockNotes, NewFile, NewFolder,
+    NextTab, OpenRecentVault, OpenSettings, OpenVault, PreviousTab, QuickSwitcher, RenameSelection,
+    SetFolderLock, ToggleNoteLock, TogglePinTab, ToggleSidebar, ViewLive, ViewPreview, ViewSource,
+    ViewSplit, WORKSPACE,
 };
 use crate::git_sync::{GitSync, GitSyncEvent};
 use crate::settings_store::SettingsStore;
 use crate::ui::editor_area::EditorArea;
 use crate::ui::{
-    change_password_dialog, dialogs, note_lock, quick_switcher, sidebar::Sidebar, title_bar,
-    update_dialog,
+    change_password_dialog, dialogs, note_lock, quick_switcher,
+    settings_dialog::{self, SettingsTargets},
+    sidebar::Sidebar,
+    title_bar, update_dialog,
 };
 use crate::updater::{Updater, UpdaterEvent};
 use crate::vault_lock::VaultLock;
@@ -43,6 +48,8 @@ pub struct Workspace {
     /// Looks for and installs new Dotnote releases.
     updater: Entity<Updater>,
     focus_handle: FocusHandle,
+    /// The vaults File > Open Recent lists now, to rebuild it only when they change.
+    menu_vaults: Vec<PathBuf>,
     /// Kept alive so our listeners keep working; dropping one unsubscribes it.
     _subscriptions: Vec<Subscription>,
 }
@@ -68,6 +75,7 @@ impl Workspace {
             // Keep the window title in step with the vault and the active tab.
             cx.observe_in(&vault, window, |this, _, window, cx| {
                 this.update_window_title(window, cx);
+                this.update_recent_menu(cx);
                 cx.notify();
             }),
             cx.observe_in(&editor_area, window, |this, _, window, cx| {
@@ -148,7 +156,19 @@ impl Workspace {
             vault_lock,
             updater,
             focus_handle,
+            // Empty, so the first vault update rebuilds the menus with the
+            // order `restore_last_vault` just changed.
+            menu_vaults: Vec::new(),
             _subscriptions: subscriptions,
+        }
+    }
+
+    /// Rebuilds the app menus when the recent vaults changed (opened, removed, cleared).
+    fn update_recent_menu(&mut self, cx: &mut Context<Self>) {
+        let now = recent_vault_paths(cx);
+        if now != self.menu_vaults {
+            self.menu_vaults = now;
+            crate::app::install_menus(cx);
         }
     }
 
@@ -234,35 +254,27 @@ impl Workspace {
 
     /// Asks the user for a folder and opens it as the vault.
     fn open_vault(&mut self, _: &OpenVault, window: &mut Window, cx: &mut Context<Self>) {
-        let answer = cx.prompt_for_paths(PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: Some("Open Vault".into()),
-        });
-        let vault = self.vault.clone();
-        cx.spawn_in(window, async move |_, cx| {
-            match answer.await {
-                // The user picked a folder.
-                Ok(Ok(Some(mut paths))) => {
-                    if let Some(path) = paths.pop() {
-                        vault.update(cx, |vault, cx| vault.open_vault(path, cx));
-                    }
-                }
-                // The system dialog failed (e.g. no portal on Linux).
-                Ok(Err(error)) => {
-                    let _ = cx.update(|window, cx| {
-                        window.push_notification(
-                            format!("Couldn't open the folder picker: {error}"),
-                            cx,
-                        );
-                    });
-                }
-                // Cancelled.
-                _ => {}
-            }
-        })
-        .detach();
+        dialogs::pick_vault_folder(self.vault.clone(), window, cx);
+    }
+
+    fn open_recent_vault(
+        &mut self,
+        action: &OpenRecentVault,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let path = action.path.clone();
+        self.vault
+            .update(cx, |vault, cx| vault.open_recent(path, cx));
+    }
+
+    fn clear_recent_vaults(
+        &mut self,
+        _: &ClearRecentVaults,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.vault.update(cx, |vault, cx| vault.clear_recent(cx));
     }
 
     fn close_vault(&mut self, _: &CloseVault, _: &mut Window, cx: &mut Context<Self>) {
@@ -354,6 +366,15 @@ impl Workspace {
         );
     }
 
+    fn open_settings(&mut self, _: &OpenSettings, window: &mut Window, cx: &mut Context<Self>) {
+        let targets = SettingsTargets {
+            vault: self.vault.clone(),
+            git_sync: self.git_sync.clone(),
+            vault_lock: self.vault_lock.clone(),
+        };
+        settings_dialog::open(targets, window, cx);
+    }
+
     fn about(&mut self, _: &About, window: &mut Window, cx: &mut Context<Self>) {
         dialogs::about(window, cx);
     }
@@ -417,12 +438,15 @@ impl Render for Workspace {
             .track_focus(&self.focus_handle)
             // `cx.listener` turns a method into a callback that gets `&mut self`.
             .on_action(cx.listener(Self::open_vault))
+            .on_action(cx.listener(Self::open_recent_vault))
+            .on_action(cx.listener(Self::clear_recent_vaults))
             .on_action(cx.listener(Self::lock_notes))
             .on_action(cx.listener(Self::change_notes_password))
             .on_action(cx.listener(Self::collapse_folders))
             .on_action(cx.listener(Self::toggle_note_lock))
             .on_action(cx.listener(Self::set_folder_lock))
             .on_action(cx.listener(Self::about))
+            .on_action(cx.listener(Self::open_settings))
             .on_action(cx.listener(Self::check_for_updates))
             .on_action(cx.listener(Self::close_vault))
             .on_action(cx.listener(Self::new_file))
@@ -504,8 +528,18 @@ impl Render for Workspace {
     }
 }
 
+/// The paths in the recent vaults list, newest first.
+fn recent_vault_paths(cx: &App) -> Vec<PathBuf> {
+    SettingsStore::get(cx)
+        .recent_vaults
+        .list()
+        .iter()
+        .map(|vault| vault.path.clone())
+        .collect()
+}
+
 /// Saves the user's Appearance choice, recolors the window, and moves the menu check mark.
-fn set_appearance(appearance: Appearance, window: &mut Window, cx: &mut App) {
+pub fn set_appearance(appearance: Appearance, window: &mut Window, cx: &mut App) {
     SettingsStore::update(cx, |settings| settings.appearance = appearance);
     sync_theme(window, cx);
     crate::app::install_menus(cx);

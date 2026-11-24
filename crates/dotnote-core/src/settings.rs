@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::fs_ops::atomic_write;
+use crate::recent_vaults::RecentVaults;
 
 /// How the editor pane shows the current note.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -52,13 +53,19 @@ pub struct SavedTab {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// The vault open when the app quit (reopened at launch).
     pub last_vault: Option<PathBuf>,
+    /// Vaults opened before, newest first, each with its open tabs.
+    pub recent_vaults: RecentVaults,
     pub view_mode: ViewMode,
     pub sidebar_width: Option<f32>,
     pub sidebar_visible: bool,
-    /// The tabs open in `last_vault`, in order, and which one was active.
-    pub open_tabs: Vec<SavedTab>,
-    pub active_tab: Option<usize>,
+    /// Before 1.2, the tabs of `last_vault` were kept here; they now live in
+    /// `recent_vaults`. Read once by `load_from`, never written.
+    #[serde(skip_serializing)]
+    open_tabs: Vec<SavedTab>,
+    #[serde(skip_serializing)]
+    active_tab: Option<usize>,
     /// Vaults with git sync turned on (the remote itself is in each vault's `.git`).
     pub synced_vaults: Vec<PathBuf>,
     /// Look for a new Dotnote release on GitHub at launch.
@@ -71,6 +78,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             last_vault: None,
+            recent_vaults: RecentVaults::default(),
             view_mode: ViewMode::default(),
             sidebar_width: None,
             sidebar_visible: true,
@@ -107,10 +115,27 @@ impl Settings {
     /// Loads settings from `path`. A missing or broken file gives the defaults,
     /// so a bad settings file can never stop the app from starting.
     pub fn load_from(path: &Path) -> Settings {
-        fs::read_to_string(path)
+        let mut settings: Settings = fs::read_to_string(path)
             .ok()
             .and_then(|json| serde_json::from_str(&json).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        settings.move_old_tabs();
+        settings
+    }
+
+    /// Settings from before 1.2 had one vault's tabs at the top level. Move
+    /// them into that vault's `recent_vaults` entry, so they still reopen.
+    fn move_old_tabs(&mut self) {
+        let tabs = std::mem::take(&mut self.open_tabs);
+        let active = self.active_tab.take();
+        if let Some(vault) = self.last_vault.clone() {
+            if self.recent_vaults.get(&vault).is_none() {
+                self.recent_vaults.remember(&vault);
+            }
+            if !tabs.is_empty() {
+                self.recent_vaults.set_tabs(&vault, tabs, active);
+            }
+        }
     }
 
     /// Saves settings to `path`, creating the folder if needed.

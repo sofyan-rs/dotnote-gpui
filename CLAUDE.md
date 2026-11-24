@@ -6,7 +6,7 @@ This file guides Claude Code (claude.ai/code) when working in this repository.
 
 Dotnote is a minimal, cross-platform (**macOS, Windows, Linux — Fedora is the Linux target**) markdown vault app in Rust. It opens a folder on disk as a "vault". Files on disk are the only source of truth, with no database. UI is built with [gpui-kit](https://gpui-kit.com/) (`gpui-kit = "0.7.1"`), which re-exports GPUI. Don't add `gpui` as a direct dependency.
 
-Scope is intentionally minimal: open a folder, browse it, edit markdown. There are no wikilinks, backlinks, tags, graph, or plugins. (Tabs are in scope; split editor groups are not. Optional git sync with the user's own remote is in scope, using the installed `git`; no Dotnote sync service.) Push back on scope creep.
+Scope is intentionally minimal: open a folder, browse it, edit markdown. One vault is open at a time; the UI calls a vault a "workspace" and can switch between recent ones (ARCHITECTURE §6.14). There are no wikilinks, backlinks, tags, graph, or plugins. (Tabs are in scope; split editor groups are not. Optional git sync with the user's own remote is in scope, using the installed `git`; no Dotnote sync service.) Push back on scope creep.
 
 **Status:** v1.0 released.
 
@@ -34,13 +34,14 @@ cargo test -p dotnote-core                             # fast pure-logic tests
 cargo test --workspace
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings  # must be clean
+bacon dev-win      # (bacon dev on macOS/Linux) rerun the app on save, see bacon.toml
 ```
 
 Rust ≥ 1.92 (required by gpui-kit). Windows needs the MSVC toolchain. Fedora needs the dnf packages listed in CONTRIBUTION.md, plus a Vulkan driver.
 
 ## Layout
 
-- `crates/dotnote-core/`: **pure logic, no gpui.** Covers scan (`node.rs`), file ops and `atomic_write` (`fs_ops.rs`), filename validation (`names.rs`), relative path and breadcrumb (`paths.rs`), formatter transforms (`format.rs`), GTK theme button colors (`gtk_theme.rs`), line/col and char count (`cursor.rs`), `\n`/`\r\n` preservation (`line_ending.rs`), file flatten/filter and tree `visible_rows` (`search.rs`), `Settings` (`settings.rs`), git sync (`git.rs`, runs the installed `git`), app updates (`update.rs`, GitHub Releases via the installed `curl`), locked notes (`lock.rs`, age encryption), and Live-mode logic (`live.rs` spans, `live_view.rs` per-line drawing and position mapping, `live_buffer.rs` text/selection/undo, `live_table.rs` tables). Anything that can be written without gpui goes here, with tests.
+- `crates/dotnote-core/`: **pure logic, no gpui.** Covers scan (`node.rs`), file ops and `atomic_write` (`fs_ops.rs`), filename validation (`names.rs`), relative path and breadcrumb (`paths.rs`), recent workspaces with per-vault tabs (`recent_vaults.rs`), formatter transforms (`format.rs`), GTK theme button colors (`gtk_theme.rs`), line/col and char count (`cursor.rs`), `\n`/`\r\n` preservation (`line_ending.rs`), file flatten/filter and tree `visible_rows` (`search.rs`), `Settings` (`settings.rs`), git sync (`git.rs`, runs the installed `git`), app updates (`update.rs`, GitHub Releases via the installed `curl`; `update_install.rs`, install kind (app/exe/rpm/Copr/AppImage) and putting the update in place), locked notes (`lock.rs`, age encryption), and Live-mode logic (`live.rs` spans, `live_view.rs` per-line drawing and position mapping, `live_buffer.rs` text/selection/undo, `live_table.rs` tables). Anything that can be written without gpui goes here, with tests.
 - `crates/dotnote/`: the GPUI app.
   - `vault_store.rs`: the `VaultStore` entity, the single source of truth, which emits `VaultEvent`.
   - `watcher.rs`: `notify` events go through a channel to `refresh`.
@@ -48,7 +49,7 @@ Rust ≥ 1.92 (required by gpui-kit). Windows needs the MSVC toolchain. Fedora n
   - `updater.rs`: the `Updater` entity (check GitHub Releases at launch / on demand, install); dialogs in `ui/update_dialog.rs`.
   - `vault_lock.rs`: the `VaultLock` entity (vault key in memory, auto-lock); UI in `ui/unlock_dialog.rs`, `ui/change_password_dialog.rs`, `ui/note_lock.rs`, `ui/editor/locked.rs`.
   - `platform.rs`: the **only** place for `#[cfg(target_os)]` and OS wording.
-  - `ui/`: views grouped by feature: `workspace.rs`, `title_bar.rs`, `window_buttons.rs` (Linux GNOME-style title bar), `sidebar/` (`mod.rs`, `file_tree.rs`, `inline_edit.rs`, `keyboard.rs`, `context_menu.rs`), `editor/` (`mod.rs` = EditorPane, `drawing.rs` = header/render, `saving.rs` = autosave + preview refresh, `formatting.rs` = toolbar commands/images/task toggle, `markdown_style.rs` = Source styling, `view_mode_switch.rs`, `formatter_bar.rs`, `preview.rs`, `status_bar.rs`, `edit_menu.rs` = right-click menu of Live and Source, `live/` = custom Live editor: `mod.rs`, `keys.rs`, `input.rs`, `layout.rs`, `style.rs`, `table.rs`, `element.rs`), `editor_area/` (tabs: `mod.rs` = EditorArea, `tab_bar.rs`), `quick_switcher.rs`, `dialogs.rs`, `empty_state.rs`. Tab rules are pure in `dotnote-core/src/tabs.rs`.
+  - `ui/`: views grouped by feature: `workspace.rs`, `title_bar.rs`, `window_buttons.rs` (Linux GNOME-style title bar), `sidebar/` (`mod.rs`, `vault_switcher.rs` = workspace switcher, `file_tree.rs`, `inline_edit.rs`, `keyboard.rs`, `context_menu.rs`), `editor/` (`mod.rs` = EditorPane, `drawing.rs` = header/render, `saving.rs` = autosave + preview refresh, `formatting.rs` = toolbar commands/images/task toggle, `markdown_style.rs` = Source styling, `view_mode_switch.rs`, `formatter_bar.rs`, `preview.rs`, `status_bar.rs`, `edit_menu.rs` = right-click menu of Live and Source, `live/` = custom Live editor: `mod.rs`, `keys.rs`, `input.rs`, `layout.rs`, `style.rs`, `table.rs`, `element.rs`), `editor_area/` (tabs: `mod.rs` = EditorArea, `tab_bar.rs`), `quick_switcher.rs`, `settings_dialog.rs` (Settings…, `secondary-,`), `segmented_control.rs` (shared look of the view mode switch and theme picker), `dialogs.rs`, `empty_state.rs`. Tab rules are pure in `dotnote-core/src/tabs.rs`.
 
 Structure rules (ARCHITECTURE §3): the codebase must stay readable for engineers new to Rust.
 - Start with one file; make a folder (with `mod.rs`) only when a module needs several files.

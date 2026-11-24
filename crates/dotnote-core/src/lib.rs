@@ -19,10 +19,12 @@ pub mod lock;
 pub mod names;
 pub mod node;
 pub mod paths;
+pub mod recent_vaults;
 pub mod search;
 pub mod settings;
 pub mod tabs;
 pub mod update;
+pub mod update_install;
 
 pub use error::{CoreError, Result};
 pub use node::VaultNode;

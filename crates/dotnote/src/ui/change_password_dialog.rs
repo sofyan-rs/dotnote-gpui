@@ -18,7 +18,7 @@ use crate::vault_lock::VaultLock;
 pub fn open(vault_lock: Entity<VaultLock>, window: &mut Window, cx: &mut App) {
     if !vault_lock.read(cx).has_password() {
         window.push_notification(
-            "This vault has no notes password yet. Lock a note to set one.",
+            "This workspace has no notes password yet. Lock a note to set one.",
             cx,
         );
         return;

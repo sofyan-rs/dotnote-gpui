@@ -97,7 +97,10 @@ impl VaultStore {
             live_sync_disabled: self.live_sync_disabled,
             ..VaultStore::default()
         };
-        SettingsStore::update(cx, |settings| settings.last_vault = Some(path.clone()));
+        SettingsStore::update(cx, |settings| {
+            settings.last_vault = Some(path.clone());
+            settings.recent_vaults.remember(&path);
+        });
         self.refresh(cx);
         if !self.live_sync_disabled {
             match watcher::start(&path, cx) {
@@ -105,6 +108,34 @@ impl VaultStore {
                 Err(message) => self.watch_failed(message, cx),
             }
         }
+        cx.notify();
+    }
+
+    /// Opens a vault from the recent list. If its folder is gone (moved,
+    /// deleted, drive unplugged), says so and drops it from the list.
+    /// Checking one folder is cheap enough for the UI thread.
+    pub fn open_recent(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        if self.root.as_deref() == Some(path.as_path()) {
+            return; // already open
+        }
+        if path.is_dir() {
+            self.open_vault(path, cx);
+            return;
+        }
+        SettingsStore::update(cx, |settings| settings.recent_vaults.forget(&path));
+        cx.emit(VaultEvent::Error(format!(
+            "The workspace folder “{}” wasn't found, so it was removed from the list.",
+            path.display()
+        )));
+        cx.notify();
+    }
+
+    /// Empties the recent list, except the open vault.
+    pub fn clear_recent(&mut self, cx: &mut Context<Self>) {
+        let open = self.root.clone();
+        SettingsStore::update(cx, |settings| {
+            settings.recent_vaults.clear_except(open.as_deref())
+        });
         cx.notify();
     }
 
@@ -139,7 +170,8 @@ impl VaultStore {
         }
     }
 
-    /// Closes the vault and forgets it.
+    /// Closes the vault. It stays in the recent list (with its tabs), but
+    /// doesn't reopen at the next launch.
     pub fn close_vault(&mut self, cx: &mut Context<Self>) {
         *self = VaultStore {
             live_sync_disabled: self.live_sync_disabled,

@@ -1,5 +1,6 @@
 //! UI tests for tabs: preview tabs, keeping tabs open, closing, pinning,
-//! reordering, following renames, and restoring tabs after a relaunch.
+//! reordering, following renames, restoring tabs after a relaunch, and
+//! switching between workspaces (vaults).
 //! The test vault is described in `ui/test_helpers.rs`.
 
 use std::fs;
@@ -237,4 +238,84 @@ fn tabs_come_back_after_a_relaunch(cx: &mut TestAppContext) {
         ]
     );
     assert_eq!(restored.1, Some(root.join("Welcome.md")));
+}
+
+/// The paths in the recent workspaces list, newest first.
+fn recent_paths(cx: &mut TestAppContext) -> Vec<PathBuf> {
+    cx.update(|cx| {
+        crate::settings_store::SettingsStore::get(cx)
+            .recent_vaults
+            .list()
+            .iter()
+            .map(|vault| vault.path.clone())
+            .collect()
+    })
+}
+
+#[gpui_kit::test]
+fn switching_workspaces_saves_notes_and_keeps_each_ones_tabs(cx: &mut TestAppContext) {
+    let s = setup(cx);
+    let first = s.dir.path().to_path_buf();
+    keep_open(&s, cx, "Welcome.md");
+    type_in_active_editor(&s, cx, "typed before switching");
+
+    // A second workspace with its own note.
+    let other_dir = tempfile::tempdir().unwrap();
+    let second = other_dir.path().to_path_buf();
+    fs::write(second.join("日本語 📓.md"), "other\n").unwrap();
+    s.vault
+        .update(cx, |vault, cx| vault.open_recent(second.clone(), cx));
+    cx.run_until_parked();
+    let note = second.join("日本語 📓.md");
+    s.vault.update(cx, |vault, cx| vault.open_note(note, cx));
+    cx.run_until_parked();
+
+    // Leaving the first workspace saved its unsaved typing.
+    let welcome = fs::read_to_string(s.path("Welcome.md")).unwrap();
+    assert!(welcome.contains("typed before switching"), "{welcome}");
+    assert_eq!(tabs(&s, cx).0, ["日本語 📓"]);
+    assert_eq!(recent_paths(cx), [second.clone(), first.clone()]);
+
+    // Back and forth: each workspace gets its own tabs back.
+    s.vault
+        .update(cx, |vault, cx| vault.open_recent(first.clone(), cx));
+    cx.run_until_parked();
+    assert_eq!(
+        tabs(&s, cx),
+        (vec!["Welcome".into()], Some("Welcome".into()))
+    );
+
+    s.vault
+        .update(cx, |vault, cx| vault.open_recent(second.clone(), cx));
+    cx.run_until_parked();
+    assert_eq!(tabs(&s, cx).0, ["日本語 📓"]);
+}
+
+#[gpui_kit::test]
+fn a_missing_recent_workspace_is_dropped_from_the_list(cx: &mut TestAppContext) {
+    let s = setup(cx);
+    let gone_dir = tempfile::tempdir().unwrap();
+    let gone = gone_dir.path().to_path_buf();
+    s.vault
+        .update(cx, |vault, cx| vault.open_recent(gone.clone(), cx));
+    cx.run_until_parked();
+    s.vault.update(cx, |vault, cx| {
+        vault.open_recent(s.dir.path().to_path_buf(), cx)
+    });
+    cx.run_until_parked();
+    drop(gone_dir); // the folder disappears (moved, deleted, drive unplugged)
+
+    s.vault
+        .update(cx, |vault, cx| vault.open_recent(gone.clone(), cx));
+    cx.run_until_parked();
+
+    assert_eq!(recent_paths(cx), [s.dir.path().to_path_buf()]);
+    let root = s
+        .vault
+        .read_with(cx, |vault, _| vault.root().map(Path::to_path_buf));
+    assert_eq!(
+        root.as_deref(),
+        Some(s.dir.path()),
+        "the open workspace stays open"
+    );
 }

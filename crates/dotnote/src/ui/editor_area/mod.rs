@@ -154,16 +154,15 @@ impl EditorArea {
     }
 
     /// Another vault was opened (or closed): save and close the old tabs, then
-    /// bring back the tabs remembered for the new vault.
+    /// bring back the tabs remembered for the new vault. The old vault's tabs
+    /// stay remembered in its `recent_vaults` entry (saved on every tab change).
     fn switch_vault(&mut self, root: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
-        let had_tabs = !self.tabs.is_empty();
         for path in self.tabs.close_where(|_, _| true) {
             self.close_pane(&path, cx);
         }
+        self.last_active = None;
         self.root = root.clone();
-        if had_tabs {
-            self.save_tabs(cx); // the old vault's tabs don't belong to the new one
-        } else if let Some(root) = &root {
+        if let Some(root) = &root {
             self.restore_tabs(root, window, cx);
         }
         cx.notify();
@@ -171,14 +170,16 @@ impl EditorArea {
 
     /// Reopens the tabs saved in settings for this vault (skipping notes that are gone).
     fn restore_tabs(&mut self, root: &Path, window: &mut Window, cx: &mut Context<Self>) {
-        let settings = SettingsStore::get(cx);
-        let saved: Vec<SavedTab> = settings
+        let Some(remembered) = SettingsStore::get(cx).recent_vaults.get(root) else {
+            return;
+        };
+        let saved: Vec<SavedTab> = remembered
             .open_tabs
             .iter()
             .filter(|tab| tab.path.starts_with(root) && tab.path.is_file())
             .cloned()
             .collect();
-        let active = settings.active_tab;
+        let active = remembered.active_tab;
         for tab in &saved {
             self.tabs.open(tab.path.clone(), tab.preview);
             if tab.pinned {
@@ -222,7 +223,11 @@ impl EditorArea {
         cx.notify();
     }
 
+    /// Remembers the open tabs in this vault's `recent_vaults` entry.
     fn save_tabs(&self, cx: &mut App) {
+        let Some(root) = self.root.clone() else {
+            return;
+        };
         let open_tabs: Vec<SavedTab> = self
             .tabs
             .tabs()
@@ -235,8 +240,9 @@ impl EditorArea {
             .collect();
         let active_tab = self.tabs.active_index();
         SettingsStore::update(cx, |settings| {
-            settings.open_tabs = open_tabs;
-            settings.active_tab = active_tab;
+            settings
+                .recent_vaults
+                .set_tabs(&root, open_tabs, active_tab)
         });
     }
 
@@ -456,7 +462,7 @@ impl Render for EditorArea {
         let body = match self.active_pane() {
             Some(pane) => pane.clone().into_any_element(),
             None if self.root.is_some() => empty_state::no_file_selected(cx).into_any_element(),
-            None => empty_state::no_vault(cx).into_any_element(),
+            None => empty_state::no_vault(&self.vault, cx).into_any_element(),
         };
         let background = cx.theme().background;
         let tab_bar = (!self.tabs.is_empty()).then(|| tab_bar::render(self, cx));

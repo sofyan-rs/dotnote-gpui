@@ -3,8 +3,9 @@
 
 use std::fs;
 
-use dotnote_core::update::{
-    clean_up_after_update, fetch_latest_release, old_exe_path, replace_with, sha256_of,
+use dotnote_core::update::{fetch_latest_release, sha256_of};
+use dotnote_core::update_install::{
+    clean_up_after_update, install_appimage, old_exe_path, replace_with,
 };
 use tempfile::tempdir;
 
@@ -70,5 +71,31 @@ fn latest_release_from_github() {
     match fetch_latest_release().unwrap() {
         Some(release) => println!("latest: {} {}", release.version, release.page_url),
         None => println!("no releases yet"),
+    }
+}
+
+#[test]
+fn appimage_is_replaced_in_place() {
+    let dir = tempdir().unwrap();
+    let apps = dir.path().join("Applications");
+    let downloads = dir.path().join("download");
+    fs::create_dir_all(&apps).unwrap();
+    fs::create_dir_all(&downloads).unwrap();
+    let running = apps.join("Dotnote-x86_64.AppImage");
+    let new = downloads.join("Dotnote-x86_64.AppImage");
+    fs::write(&running, "v1").unwrap();
+    fs::write(&new, "v2").unwrap();
+
+    let start = install_appimage(&new, &running).unwrap();
+
+    assert_eq!(start, running);
+    assert_eq!(fs::read_to_string(&running).unwrap(), "v2");
+    // Nothing left over next to it.
+    assert_eq!(fs::read_dir(&apps).unwrap().count(), 1);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode = fs::metadata(&running).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "the new AppImage must be executable");
     }
 }

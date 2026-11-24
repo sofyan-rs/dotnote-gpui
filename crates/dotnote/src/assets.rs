@@ -31,6 +31,7 @@ gpui_kit::assets::icon_assets!(
         ListTodo,
         Lock,
         LockOpen,
+        Monitor,
         NotebookPen,
         PenLine,
         Pin,

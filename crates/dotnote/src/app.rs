@@ -47,15 +47,17 @@ pub fn run(cx: &mut App) {
 }
 
 /// Native menu bar on macOS; the in-window menu bar (Windows, Linux) reads the same list.
-/// Called again when a setting shown in the menus (the appearance check mark) changes.
+/// Called again when a setting shown in the menus changes (the appearance check
+/// mark, the recent workspaces).
 pub fn install_menus(cx: &mut App) {
-    let appearance = SettingsStore::get(cx).appearance;
+    let settings = SettingsStore::get(cx);
+    let (appearance, recent) = (settings.appearance, settings.recent_vaults.clone());
     // `Menu` can't be cloned, so build the list once for each consumer.
-    let owned_menus = actions::app_menus(appearance)
+    let owned_menus = actions::app_menus(appearance, &recent)
         .into_iter()
         .map(|menu| menu.owned())
         .collect();
     GlobalState::global_mut(cx).set_app_menus(owned_menus);
-    cx.set_menus(actions::app_menus(appearance));
+    cx.set_menus(actions::app_menus(appearance, &recent));
     title_bar::reload_menu_bar(cx);
 }

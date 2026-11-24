@@ -12,3 +12,10 @@
 
 # Local env
 .env
+
+# Dev settings used by `bacon dev` / `bacon dev-win`
+/.dev-config/
+
+# Copr source rpm work folders (.copr/Makefile)
+/_copr/
+/_srpm/

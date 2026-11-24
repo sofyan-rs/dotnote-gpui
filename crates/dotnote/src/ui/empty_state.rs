@@ -1,26 +1,63 @@
-//! Placeholder screens shown when no vault or no note is open.
+//! Placeholder screens shown when no vault (workspace) or no note is open.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{ActiveTheme as _, Icon, v_flex};
-use gpui_kit::{App, IntoElement, ParentElement as _, Styled as _, div, px};
+use gpui_kit::{App, Entity, IntoElement, ParentElement as _, Styled as _, div, px};
 
 use crate::actions::OpenVault;
+use crate::settings_store::SettingsStore;
+use crate::vault_store::VaultStore;
 
-/// "No Vault Selected" with an Open Vault button.
-pub fn no_vault(cx: &App) -> impl IntoElement {
+/// "No Workspace Selected" with an Open Workspace button and, below it, the
+/// recent workspaces to reopen with one click.
+pub fn no_vault(vault: &Entity<VaultStore>, cx: &App) -> impl IntoElement {
+    let recent = SettingsStore::get(cx).recent_vaults.clone();
+    let recent_buttons =
+        recent
+            .list()
+            .iter()
+            .zip(recent.labels())
+            .enumerate()
+            .map(|(index, (entry, label))| {
+                let (vault, path) = (vault.clone(), entry.path.clone());
+                Button::new(("recent-vault", index))
+                    .ghost()
+                    .icon(IconName::Folder)
+                    .label(label)
+                    .tooltip(entry.path.display().to_string())
+                    .on_click(move |_, _, cx| {
+                        let path = path.clone();
+                        vault.update(cx, |vault, cx| vault.open_recent(path, cx));
+                    })
+            });
+    let recent_list = (!recent.is_empty()).then(|| {
+        v_flex()
+            .pt_4()
+            .gap_1()
+            .items_center()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Recent Workspaces"),
+            )
+            .children(recent_buttons)
+    });
+
     message(
         IconName::FolderPlus,
-        "No Vault Selected",
-        "Open a folder to use it as your vault.",
+        "No Workspace Selected",
+        "Open a folder to use it as your workspace.",
         cx,
     )
     .child(
         Button::new("open-vault")
             .primary()
-            .label("Open Vault…")
+            .label("Open Workspace…")
             .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenVault), cx)),
     )
+    .children(recent_list)
 }
 
 /// "No File Selected", shown while a vault is open but no note is.

@@ -12,6 +12,10 @@ mod note_lock_tests;
 pub mod quick_switcher;
 #[cfg(test)]
 mod quick_switcher_tests;
+pub mod segmented_control;
+pub mod settings_dialog;
+#[cfg(test)]
+mod settings_dialog_tests;
 pub mod sidebar;
 #[cfg(test)]
 pub mod test_helpers;

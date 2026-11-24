@@ -1,0 +1,51 @@
+#:schema https://dystroy.org/bacon/.bacon.schema.json
+
+# Bacon: rebuilds and reruns on every save (GPUI has no hot reload).
+#   bacon            check (default)
+#   bacon dev-win    run the app, restart it on save (Windows)
+#   bacon dev        run the app, restart it on save (macOS / Linux)
+#   bacon clippy     clippy exactly like CI (`-D warnings`)
+#   bacon test       all tests; one crate: bacon test -- -p dotnote-core
+# Help: https://dystroy.org/bacon/config/
+
+default_job = "check"
+env.CARGO_TERM_COLOR = "always"
+
+[jobs.check]
+command = ["cargo", "check", "--workspace", "--all-targets"]
+need_stdout = false
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+need_stdout = false
+
+[jobs.test]
+command = ["cargo", "test", "--workspace"]
+need_stdout = true
+
+# The app keeps running, so on a change bacon kills it and starts the new build.
+# `kill` must stop `cargo run` *and* the app it started: a leftover app would keep
+# its window open and, on Windows, lock `dotnote.exe` so the next build can't link.
+# Settings go to `.dev-config/` (git-ignored), so your real settings stay untouched.
+[jobs.dev-win]
+command = ["cargo", "run", "-p", "dotnote"]
+env.DOTNOTE_CONFIG_DIR = ".dev-config"
+need_stdout = true
+allow_warnings = true
+background = false
+on_change_strategy = "kill_then_restart"
+kill = ["taskkill", "/F", "/T", "/PID"] # /T: the whole process tree
+scroll_anchor = "auto"
+
+[jobs.dev]
+command = ["cargo", "run", "-p", "dotnote"]
+env.DOTNOTE_CONFIG_DIR = ".dev-config"
+need_stdout = true
+allow_warnings = true
+background = false
+on_change_strategy = "kill_then_restart"
+kill = ["pkill", "-TERM", "-P"] # the children of `cargo run`, i.e. the app
+scroll_anchor = "auto"
+
+[keybindings]
+c = "job:clippy"

@@ -8,7 +8,7 @@ name: Release
 #   Dotnote-macos-arm64.zip, Dotnote-windows-x64.zip, Dotnote-fedora-x86_64.rpm,
 #   Dotnote-x86_64.AppImage
 # The .dmg and the Windows setup.exe are for first installs only.
-# The Copr repository (dnf) builds from the tag itself, see packaging/linux/dotnote.spec.
+# The Copr repository (dnf) is built from the same tag by the `copr` job below.
 on:
   push:
     tags: ["v*"]
@@ -144,3 +144,31 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+
+  # The dnf repository: Copr builds this tag from source (packaging/linux/dotnote.spec).
+  # Needs the COPR_CONFIG secret: the text from https://copr.fedorainfracloud.org/api/
+  # (it expires after 180 days; paste the new one into the secret then).
+  copr:
+    name: Copr (dnf repository)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start the Copr build of this tag
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+        run: |
+          if [ -z "$COPR_CONFIG" ]; then
+            echo "::error::The COPR_CONFIG secret is missing (docs/CONTRIBUTION.md, Copr)."
+            exit 1
+          fi
+          mkdir -p ~/.config
+          printf '%s\n' "$COPR_CONFIG" > ~/.config/copr
+          pipx install copr-cli
+          # --nowait: the build takes a while; follow it on the Copr project page.
+          copr-cli buildscm kurodev/dotnote \
+            --clone-url "https://github.com/${{ github.repository }}" \
+            --commit "$GITHUB_REF_NAME" \
+            --spec packaging/linux/dotnote.spec \
+            --method make_srpm \
+            --nowait

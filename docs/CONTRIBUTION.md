@@ -76,8 +76,10 @@ A test vault: open `fixtures/sample-vault/`. Its `Example.md` uses every markdow
 **Copr (dnf repository).** Fedora users can install with `sudo dnf copr enable kurodev/dotnote && sudo dnf install dotnote`; dnf then updates it. Copr builds from source with `packaging/linux/dotnote.spec`. One-time setup:
 1. Fedora account (accounts.fedoraproject.org), then sign in at copr.fedorainfracloud.org.
 2. New project `dotnote`: pick the current Fedora releases (x86_64, aarch64) and turn on **"Enable internet access during builds"** (cargo downloads the crates).
-3. Add a package: source type **SCM**, clone URL `https://github.com/sofyan-rs/dotnote-gpui`, build method **make_srpm** (it runs `.copr/Makefile`). Turn on "Auto-rebuild".
-4. In the project's *Integrations*, copy the GitHub webhook URL into the repo's *Settings → Webhooks* (content type `application/json`, "Just the push event"). Every pushed tag then builds; or click *Rebuild* by hand.
+3. Add a package: source type **SCM**, clone URL `https://github.com/sofyan-rs/dotnote-gpui`, committish `main`, spec `packaging/linux/dotnote.spec`, build method **make_srpm** (it runs `.copr/Makefile`). Leave **Auto-rebuild off**: every push to `main` would publish unreleased code under the last release's version.
+4. Copy the API config from https://copr.fedorainfracloud.org/api/ into a GitHub secret named **`COPR_CONFIG`** (repo *Settings → Secrets and variables → Actions*). The release workflow's `copr` job then builds each pushed `v*` tag. The token expires after 180 days; when the job fails with an auth error, paste the new config into the secret and re-run the job.
+
+Without the secret, the `copr` job fails (the GitHub release is still published); click *Rebuild* in Copr by hand instead.
 
 To test the spec locally on Fedora: `make -f .copr/Makefile srpm` then `rpmbuild --rebuild _srpm/*.src.rpm`.
 
@@ -86,7 +88,7 @@ The icon master is `assets/icon/dotnote.png`. After changing it, run `packaging/
 **Releasing:**
 1. Bump `version` in the root `Cargo.toml` (`[workspace.package]`), run `cargo build` so `Cargo.lock` follows, and commit (`chore(release): v0.2.0`).
 2. Tag and push: `git tag v0.2.0 && git push origin main v0.2.0`. The tag must match the `Cargo.toml` version or the workflow stops.
-3. The Release workflow builds all three packages, writes `SHA256SUMS`, and publishes a GitHub Release with generated notes. Installed copies of Dotnote find it at their next launch (or *Check for Updates…*) and offer to install it (ARCHITECTURE §6.13).
+3. The Release workflow builds the packages (macOS, Windows, rpm, AppImage), writes `SHA256SUMS`, publishes a GitHub Release with generated notes, then starts the Copr build of the tag. Installed copies of Dotnote find it at their next launch (or *Check for Updates…*) and offer to install it (ARCHITECTURE §6.13).
 
 Don't rename the release assets: the updater looks for those exact names. To test packaging without releasing, run the workflow manually from the Actions tab and download the artifacts.
 

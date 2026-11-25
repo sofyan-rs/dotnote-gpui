@@ -20,8 +20,6 @@ Open any folder on disk as a workspace (a "vault"), browse it in a sidebar, and 
 
 ![A locked note: encrypted on disk until the workspace password is entered](ss/ss-3.png)
 
-> **Status:** v1.0.
-
 ## Download
 
 Get the latest version from [Releases](https://github.com/sofyan-rs/dotnote-gpui/releases/latest):
